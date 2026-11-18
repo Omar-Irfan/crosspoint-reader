@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdlib>
+#include <cstring>
 
 #include "ClippingStore.h"
 #include "CrossPointSettings.h"
@@ -20,6 +21,7 @@
 #include "clippings/SelectionGeometry.h"
 #include "components/UIScale.h"
 #include "components/UITheme.h"
+#include "util/AiAssist.h"
 #include "util/DictionaryRegistry.h"
 #include "util/WordSelectionInput.h"
 
@@ -423,6 +425,10 @@ void ClipSelectionActivity::confirmSelection(const ClippingResult::Action action
     requestUpdate();
     return;
   }
+  // The sentence is only used by Ask AI, for lookups started from the book.
+  if (action == ClippingResult::Action::Lookup && mode != Mode::DefinitionLookup && AiAssist::isConfigured()) {
+    buildContext(first, last, result.context);
+  }
   result.startPageOffset = words[first].pageOffset;
   result.endPageOffset = words[last].pageOffset;
   result.startWordIndex = words[first].pageWordIndex;
@@ -441,6 +447,67 @@ void ClipSelectionActivity::confirmSelection(const ClippingResult::Action action
   }
   setResult(std::move(result));
   finish();
+}
+
+namespace {
+
+// True when a word ends a sentence: . ! ? ؟ ۔ … possibly before closing quotes.
+bool endsSentence(const char* word) {
+  if (!word) return false;
+  size_t n = strlen(word);
+  const auto* b = reinterpret_cast<const unsigned char*>(word);
+  for (;;) {
+    if (n == 0) return false;
+    const char last = word[n - 1];
+    if (last == '.' || last == '!' || last == '?') return true;
+    if (last == '"' || last == '\'' || last == ')' || last == ']') {
+      --n;
+      continue;
+    }
+    if (n >= 2 && ((b[n - 2] == 0xD8 && b[n - 1] == 0x9F) || (b[n - 2] == 0xDB && b[n - 1] == 0x94)))
+      return true;                                         // ؟ ۔
+    if (n >= 2 && b[n - 2] == 0xC2 && b[n - 1] == 0xBB) {  // »
+      n -= 2;
+      continue;
+    }
+    if (n >= 3 && b[n - 3] == 0xE2 && b[n - 2] == 0x80) {
+      if (b[n - 1] == 0xA6) return true;           // …
+      if (b[n - 1] == 0x9D || b[n - 1] == 0x99) {  // ” ’
+        n -= 3;
+        continue;
+      }
+    }
+    return false;
+  }
+}
+
+constexpr int CONTEXT_MAX_WORDS_EACH_SIDE = 30;
+
+}  // namespace
+
+// The sentence around [first, last] on the loaded pages: back to the word
+// after the previous sentence end, forward through the next one, never past a
+// paragraph start, at most CONTEXT_MAX_WORDS_EACH_SIDE words each way.
+void ClipSelectionActivity::buildContext(const int first, const int last, std::string& out) const {
+  // The context is optional: skip it rather than fail the lookup when the
+  // heap cannot hold a second selection-sized buffer.
+  const auto heap = HalMemory::getDefaultHeap();
+  if (heap.largestBlockBytes < CLIPPING_TEXT_MAX + 1 || heap.freeBytes < CLIPPING_TEXT_MAX + 1 + 2048) {
+    out.clear();
+    return;
+  }
+  int begin = first;
+  while (begin > 0 && first - begin < CONTEXT_MAX_WORDS_EACH_SIDE && !words[begin].paragraphStart &&
+         !endsSentence(words[begin - 1].text)) {
+    --begin;
+  }
+  int end = last;
+  while (end + 1 < static_cast<int>(wordCount) && end - last < CONTEXT_MAX_WORDS_EACH_SIDE &&
+         !words[end + 1].paragraphStart && !endsSentence(words[end].text)) {
+    ++end;
+  }
+  if (!buildSelectedText(begin, end, out)) out.clear();
+  out.shrink_to_fit();
 }
 
 void ClipSelectionActivity::cancel() {

@@ -231,6 +231,8 @@ def build_family(
 
     if family.get("force_autohint", False):
         cmd.append("--force-autohint")
+    if family.get("reposition_marks", False):
+        cmd.append("--reposition-marks")
 
     # Run fontconvert_sdcard.py
     start = time.monotonic()

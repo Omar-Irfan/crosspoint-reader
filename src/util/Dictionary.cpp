@@ -1,5 +1,6 @@
 #include "Dictionary.h"
 
+#include <ArabicStem.h>
 #include <Arduino.h>
 #include <HalMemory.h>
 #include <Logging.h>
@@ -796,7 +797,7 @@ std::string Dictionary::cleanWord(const char* word) {
       const unsigned char* p = b + start;
       const uint32_t cp = utf8NextCodepoint(&p);
 
-      if (CjkBreaks::isNoBreakAfterCjkPunctuation(cp)) {
+      if (CjkBreaks::isNoBreakAfterCjkPunctuation(cp) || ArabicStem::isArabicPunctuation(cp)) {
         start += static_cast<size_t>(p - (b + start));
       } else {
         break;
@@ -815,7 +816,7 @@ std::string Dictionary::cleanWord(const char* word) {
       }
       const unsigned char* p = b + lastCharStart;
       const uint32_t cp = utf8NextCodepoint(&p);
-      if (CjkBreaks::isNoBreakBeforeCjkPunctuation(cp)) {
+      if (CjkBreaks::isNoBreakBeforeCjkPunctuation(cp) || ArabicStem::isArabicPunctuation(cp)) {
         end = lastCharStart;
       } else {
         break;
@@ -869,6 +870,7 @@ bool Dictionary::lookup(const char* word, std::string& definitionOut, std::strin
   setResult(LookupResult::NotFound);
   // cleanWord plus three stem variants can retain five input-sized buffers,
   // including growth of a concatenated variant. Keep the viewer intact on OOM.
+  // (Arabic words are budgeted where their variants are chosen, below.)
   const size_t wordBytes = word ? strlen(word) + 1 : 1;
   const size_t workingBytes = 5 * wordBytes + 6 * sizeof(std::string) + DEFINITION_HEAP_HEADROOM_BYTES;
   const auto heap = HalMemory::getDefaultHeap();
@@ -926,7 +928,27 @@ bool Dictionary::lookup(const char* word, std::string& definitionOut, std::strin
 
     if (group.empty() && !group.lowMemory()) {
       std::vector<std::string> variants;
-      stemVariants(cleaned, variants);
+      // Arabic clitic forms are often listed only in the .syn, so Arabic
+      // variants get a second pass over it once no variant is a headword.
+      // Phrases skip Arabic clitic variants: a phrase miss falls back to a word-by-word gloss.
+      const bool arabic = ArabicStem::containsArabic(cleaned) && cleaned.find_first_of(" \t\r\n") == std::string::npos;
+      if (arabic) {
+        // ArabicStem ranks candidates (one block) and keeps the chosen variants;
+        // a restored letter replaces a removed one, so none outgrows the word.
+        constexpr size_t ARABIC_BUFFERS = ArabicStem::MAX_CANDIDATES + ArabicStem::MAX_VARIANTS + 1;
+        const size_t arabicBytes =
+            ARABIC_BUFFERS * (cleaned.size() + 1 + sizeof(std::string)) + DEFINITION_HEAP_HEADROOM_BYTES;
+        const auto arabicHeap = HalMemory::getDefaultHeap();
+        if (arabicHeap.freeBytes < arabicBytes ||
+            arabicHeap.largestBlockBytes < ArabicStem::MAX_CANDIDATES * (sizeof(std::string) + sizeof(int))) {
+          LOG_ERR("DICT", "Low heap for Arabic variants (%u bytes)", static_cast<unsigned>(arabicBytes));
+          setResult(LookupResult::LowMemory);
+          return false;
+        }
+        ArabicStem::variants(cleaned, variants);
+      } else {
+        stemVariants(cleaned, variants);
+      }
       for (const auto& variant : variants) {
         bool variantReadError = false;
         locateAll(session, variant.c_str(), group, &variantReadError);
@@ -935,6 +957,19 @@ bool Dictionary::lookup(const char* word, std::string& definitionOut, std::strin
         if (!group.empty()) {
           matchedHeadwordOut = group.front().headword.get();
           break;
+        }
+      }
+      if (arabic && hasSyn && group.empty() && !group.lowMemory()) {
+        for (const auto& variant : variants) {
+          bool synonymReadError = false;
+          locateSynonyms(session, variant.c_str(), group, &synonymReadError);
+          searchFailed = searchFailed || synonymReadError;
+          if (group.lowMemory()) break;
+          if (!group.empty()) {
+            groupFromSynonyms = true;
+            matchedHeadwordOut = cleaned;
+            break;
+          }
         }
       }
     }

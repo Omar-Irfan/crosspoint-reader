@@ -681,7 +681,9 @@ If the device sleeps or you close the book after following a link, the book reop
 
 Words on the current page can be looked up in an offline StarDict dictionary stored on the SD card. Copy a dictionary to the `/dictionaries/` folder, select it in **Settings → Reader → Dictionary**, then start a lookup by choosing **Look Up** in the **[Reader Menu](#5-reader-menu)** (or by holding **Confirm**, if the **Menu long press** setting in **[Controls Settings](#363-controls)** is set to "Dictionary"). Use **Left/Right** to highlight a word and press **Confirm** to show its definition.
 
-See [docs/dictionary.md](docs/dictionary.md) for supported formats, setup, and where to find dictionaries.
+Arabic words are found through attached particles and pronouns (بكتابه finds كتاب). A selected phrase that is not an entry is glossed word by word. With an AI key on the SD card, hold Confirm on a definition (or tap **Ask AI** in its header on touch devices) to ask AI about it.
+
+See [docs/dictionary.md](docs/dictionary.md) for supported formats, setup, Ask AI, and where to find dictionaries.
 
 ### System Navigation
 

@@ -13,6 +13,7 @@
 #   intervals:   Comma-separated Unicode interval presets for fontconvert_sdcard.py
 #   sizes:       Point sizes to generate
 #   force_autohint: (optional) Force FreeType auto-hinter instead of native hinting
+#   reposition_marks: (optional) Fixed heights for Arabic marks (fonts that place marks via GPOS)
 #   styles:      Map of style name -> font source
 #                  path: relative to lib/EpdFont (for committed fonts)
 #                  url:  download URL (for fonts not in the repo)
@@ -345,6 +346,7 @@ families:
     description: "Arabic naskh-style serif (Arabic, Latin)"
     scripts: [arabic, latin]
     intervals: arabic,latin-ext,ipa-chars
+    reposition_marks: true  # marks are GPOS-positioned
     sizes: [12, 14, 16, 18]
     styles:
       regular:    {url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf"}

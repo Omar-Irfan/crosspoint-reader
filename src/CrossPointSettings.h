@@ -351,7 +351,13 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t longPressButtonBehavior = OFF;
   // Long-press Confirm function in EPUB reader (cycles through LONG_PRESS_MENU_FUNCTION values).
   // Defaults to Disabled so shortcut-based bookmark toggling remains opt-in.
-  uint8_t longPressMenuFunction = LP_MENU_DISABLED;
+#ifdef CROSSPOINT_ARABIC_FIRST
+  // Arabic-first build: holding Confirm while reading opens the dictionary.
+  static constexpr uint8_t DEFAULT_LONG_PRESS_MENU = LP_MENU_DICTIONARY;
+#else
+  static constexpr uint8_t DEFAULT_LONG_PRESS_MENU = LP_MENU_DISABLED;
+#endif
+  uint8_t longPressMenuFunction = DEFAULT_LONG_PRESS_MENU;
   // UI Theme
   uint8_t uiTheme = LYRA;
   // Sunlight fading compensation

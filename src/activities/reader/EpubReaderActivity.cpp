@@ -583,7 +583,7 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
       }
       auto lookup = makeUniqueNoThrow<DictionaryWordSelectActivity>(
           renderer, mappedInput, std::move(page), left + SETTINGS.screenMargin, top + SETTINGS.screenMargin,
-          clipping.text, std::move(vocabulary));
+          clipping.text, std::move(vocabulary), clipping.context);
       if (!lookup) {
         LOG_ERR("CLIP", "OOM: dictionary lookup activity");
         requestUpdate();

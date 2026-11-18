@@ -187,7 +187,10 @@ struct Dictionary {
   }
   bool lookup(const char* word, std::string& text, std::string& headword, LookupResult* result) {
     lastQuery = word;
-    if (std::strcmp(word, "missing") == 0) { *result = LookupResult::NotFound; return false; }
+    if (std::strcmp(word, "missing") == 0 || std::strchr(word, ' ')) {  // a phrase is no entry
+      *result = LookupResult::NotFound;
+      return false;
+    }
     // A synonym selects entry 20, although both entries have the displayed headword "same".
     // The .syn path shows the word that was looked up, the .idx path the stored
     // headword — so looking the displayed headword up again finds the same entry.
@@ -252,6 +255,15 @@ struct DictionaryDefinitionActivity {
   void showMessage(StrId);
   void navigateDefinition(bool);
   bool restoreCurrentDefinition(bool);
+  // Production glosses a phrase that is not an entry; the stub marks the gloss text.
+  static bool lookupOrGloss(Dictionary& dictionary, const char* word, bool, std::string& text, std::string& headword,
+                            Dictionary::LookupResult& result) {
+    if (dictionary.lookup(word, text, headword, &result)) return true;
+    if (result != Dictionary::LookupResult::NotFound || !std::strchr(word, ' ')) return false;
+    text = std::string("gloss of ") + word;
+    headword = word;
+    return true;
+  }
   bool buildPlainSelectionPages();
   void startSelection(int x = -1, int y = -1);
 };
@@ -350,6 +362,17 @@ int main() {
   assert(view.content.text == dictionary.entries.at(10));
   view.navigateDefinition(true);
   assert(view.content.text == dictionary.entries.at(20));
+  // Back to a glossed phrase rebuilds the gloss instead of leaving the lookup.
+  view.content = {};
+  view.lookup->query = "missing words";
+  view.content.headword = "missing words";
+  view.content.text = "gloss of missing words";
+  assert(view.prepareDefinition(view.content));
+  view.lookup->pendingWord = "same";
+  view.navigateDefinition(false);
+  assert(view.content.text == dictionary.entries.at(10));
+  view.navigateDefinition(true);
+  assert(!view.finished && view.lookup->depth == 0 && view.content.text == "gloss of missing words");
   // Back must exit if the original styled position cannot be restored.
   view.htmlDefinition = styledAvailable = true;
   view.content.text = dictionary.entries.at(10);
@@ -538,6 +561,7 @@ lookup_harness = r'''
 #include <string_view>
 #include <vector>
 #include <CjkBreaks.h>
+#include <ArabicStem.h>
 #include <Utf8.h>
 #define LOG_ERR(...) ((void)0)
 #define LOG_INF(...) ((void)0)
@@ -566,12 +590,14 @@ class Dictionary {
   bool htmlDefinitions = false;
   unsigned searches = 0;
   std::string searchedWord;
+  std::vector<std::string> searchedWords;
   std::unique_ptr<DictEntryList> entryList = std::make_unique<DictEntryList>();
   bool isOpen() const { return true; }
   bool openSession(LookupSession&) { return true; }
   void locateAll(LookupSession&, const char* word, DictEntryList&, bool* readError) {
     ++searches;
     searchedWord = word;
+    searchedWords.emplace_back(word);
     if (readError) *readError = false;
   }
   bool locateSynonyms(LookupSession&, const char*, DictEntryList&, bool*) {
@@ -617,8 +643,13 @@ int main() {
   assert(!dictionary.lookup("שָׁלוֹם", definition, headword, &hebrewResult));
   assert(hebrewResult == Dictionary::LookupResult::NotFound && dictionary.searchedWord == "שלום");
   auto arabicResult = Dictionary::LookupResult::Found;
+  dictionary.searchedWords.clear();
   assert(!dictionary.lookup("شَكَّلَ", definition, headword, &arabicResult));
-  assert(arabicResult == Dictionary::LookupResult::NotFound && dictionary.searchedWord == "شكّل");
+  // Vowel marks are stripped and shadda kept for the exact search; Arabic
+  // fallbacks (here, without shadda) follow it.
+  assert(arabicResult == Dictionary::LookupResult::NotFound && dictionary.searchedWords.front() == "شكّل");
+  assert(std::find(dictionary.searchedWords.begin(), dictionary.searchedWords.end(), "شكل") !=
+         dictionary.searchedWords.end());
   for (const char* suffix : {"ing", "ed", "ies"}) {
     const std::string phrase = std::string(4096 - std::strlen(suffix), 'a') + suffix;
     auto result = Dictionary::LookupResult::Found;
@@ -633,6 +664,16 @@ int main() {
     HalMemory::heap = {65536, 65536};
     assert(!dictionary.lookup(phrase.c_str(), definition, headword, &result));
     assert(result == Dictionary::LookupResult::NotFound && dictionary.searches > 1);
+  }
+  {
+    // A long Arabic phrase gets the phrase budget, not the per-word Arabic one,
+    // so a miss is NotFound (and the caller glosses it), not LowMemory.
+    std::string phrase;
+    for (int i = 0; i < 100; ++i) phrase += "\xD9\x83\xD8\xAA\xD8\xA7\xD8\xA8 ";  // "كتاب " x100
+    auto result = Dictionary::LookupResult::Found;
+    HalMemory::heap = {65536, 65536};
+    assert(!dictionary.lookup(phrase.c_str(), definition, headword, &result));
+    assert(result == Dictionary::LookupResult::NotFound);
   }
 }
 '''
@@ -656,7 +697,8 @@ with tempfile.TemporaryDirectory() as directory:
     (path / "lookup.cpp").write_text(lookup_harness)
     subprocess.run(["c++", "-std=c++20", "-Wall", "-Wextra", "-Werror",
                     "-I", str(ROOT / "lib/Epub/Epub"), "-I", str(ROOT / "lib/Utf8"),
-                    str(path / "lookup.cpp"),
+                    "-I", str(ROOT / "lib/ArabicStem"),
+                    str(path / "lookup.cpp"), str(ROOT / "lib/ArabicStem/ArabicStem.cpp"),
                     str(ROOT / "lib/Utf8/Utf8.cpp"), str(ROOT / "lib/Epub/Epub/CjkBreaks.cpp"),
                     str(ROOT / "lib/Epub/Epub/hyphenation/HyphenationCommon.cpp"),
                     "-o", str(path / "lookup")], check=True)

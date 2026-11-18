@@ -18,13 +18,15 @@ class DictionaryWordSelectActivity final : public Activity {
  public:
   explicit DictionaryWordSelectActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                         std::unique_ptr<Page> page, int marginLeft, int marginTop,
-                                        std::string lookupText = {}, VocabularyContext vocabulary = {})
+                                        std::string lookupText = {}, VocabularyContext vocabulary = {},
+                                        std::string context = {})
       : Activity("DictionaryWordSelect", renderer, mappedInput),
         page(std::move(page)),
         marginLeft(marginLeft),
         marginTop(marginTop),
         lookupText(std::move(lookupText)),
-        vocabulary(std::move(vocabulary)) {}
+        vocabulary(std::move(vocabulary)),
+        context(std::move(context)) {}
 
   void onEnter() override;
   void loop() override;
@@ -42,6 +44,7 @@ class DictionaryWordSelectActivity final : public Activity {
 
   std::string lookupText;
   VocabularyContext vocabulary;
+  std::string context;  // sentence around the selection, for Ask AI
   bool lookupPending = false;
   Dictionary dict;
   bool dictOpenAttempted = false;

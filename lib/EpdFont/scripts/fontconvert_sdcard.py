@@ -49,7 +49,9 @@ INTERVAL_PRESETS = {
     "cyrillic":    [(0x0400, 0x04FF), (0x0500, 0x052F)],
     "hebrew":      [(0x0590, 0x05FF), (0xFB1D, 0xFB4F)],
     "arabic":      [(0x0600, 0x06FF), (0x0750, 0x077F), (0x08A0, 0x08FF),
-                    (0xFB50, 0xFDF9), (0xFE70, 0xFEFF)],
+                    # FDFA-FDFB: ﷺ and ﷻ, common honorifics in Islamic texts.
+                    # ﷽ (FDFD, the whole basmala in one glyph) stays out: far wider than a line.
+                    (0xFB50, 0xFDFB), (0xFE70, 0xFEFF)],
     "georgian":    [(0x10A0, 0x10FF), (0x2D00, 0x2D2F)],
     "armenian":    [(0x0530, 0x058F)],
     "ethiopic":    [(0x1200, 0x137F), (0x1380, 0x139F), (0x2D80, 0x2DDF)],
@@ -570,8 +572,30 @@ def extract_ligatures_fonttools(font_path, codepoints):
     return pairs
 
 
+def arabic_mark_top(code_point, size, top):
+    """Fixed em-relative height for an Arabic mark; other code points keep top.
+
+    The rasterizer does not apply GPOS mark attachment, so fonts that anchor
+    marks through GPOS (Amiri, most naskh faces) place them at the baseline.
+    Marks are tiered so shadda and a vowel on one short letter do not collide;
+    over tall letters the renderer raises both to the same height.
+    """
+    is_mark = (0x064B <= code_point <= 0x065F or code_point == 0x0670
+               or 0x06D6 <= code_point <= 0x06ED)
+    if not is_mark:
+        return top
+    em_px = size * 150 / 72.0
+    if code_point in (0x0650, 0x064D, 0x0655, 0x0656, 0x065C, 0x06E3, 0x06ED):  # below
+        return -max(1, round(em_px * 0.05))
+    if code_point == 0x0651:  # shadda: closest above-mark
+        return round(em_px * 0.75)
+    if code_point in (0x064B, 0x064C, 0x064E, 0x064F, 0x0652, 0x0670):  # vowels, tanwin, sukun, dagger alef
+        return round(em_px * 0.9)
+    return round(em_px * 1.05)  # maddah, hamza above, Quranic annotation marks
+
+
 def rasterize_font_style(fontfile, size, intervals, style_id=0, force_autohint=False,
-                         fallback_fontfile=None):
+                         fallback_fontfile=None, reposition_marks=False):
     """Rasterize all glyphs for one font style. Returns StyleRasterData."""
     import freetype
 
@@ -704,12 +728,15 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0, force_autohint=F
                 pixels2b.append(px)
 
             packed = bytes(pixels2b)
+            glyph_top = f.glyph.bitmap_top
+            if reposition_marks:
+                glyph_top = arabic_mark_top(code_point, size, glyph_top)
             glyph = GlyphProps(
                 width=bitmap.width,
                 height=bitmap.rows,
                 advance_x=fp4_from_ft16_16(f.glyph.linearHoriAdvance),
                 left=f.glyph.bitmap_left,
-                top=f.glyph.bitmap_top,
+                top=glyph_top,
                 data_length=len(packed),
                 data_offset=total_bitmap_size,
                 code_point=code_point,
@@ -830,7 +857,7 @@ def style_sections_total_size(sections):
 # --- File writers ---
 
 def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
-                               force_autohint=False, fallback_style_fonts=None):
+                               force_autohint=False, fallback_style_fonts=None, reposition_marks=False):
     """Generate a multi-style v4 .cpfont file.
 
     style_fonts: dict of {style_id: fontfile_path} e.g. {0: "Regular.ttf", 2: "Italic.ttf"}
@@ -852,7 +879,8 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
         raster_data[style_id] = rasterize_font_style(
             fontfile, size, intervals, style_id=style_id,
             force_autohint=force_autohint,
-            fallback_fontfile=fallback_fontfile)
+            fallback_fontfile=fallback_fontfile,
+            reposition_marks=reposition_marks)
 
     # Pack binary sections for each style
     packed_sections = {}  # style_id -> tuple of section bytearrays
@@ -945,6 +973,9 @@ def main():
                         help="Font style for single-style mode (default: regular).")
     parser.add_argument("--name", dest="name",
                         help="Font family name for output filenames (default: derived from font filename).")
+    parser.add_argument("--reposition-marks", dest="reposition_marks", action="store_true",
+                        help="Place Arabic marks (harakat, shadda, Quranic marks) at fixed heights. "
+                             "Use for fonts that position marks through OpenType GPOS, such as Amiri.")
     parser.add_argument("--force-autohint", dest="force_autohint", action="store_true",
                         help="Force FreeType auto-hinter instead of native font hinting.")
     parser.add_argument("-o", "--output", dest="output",
@@ -1070,7 +1101,8 @@ def main():
         total_size += generate_cpfont_multistyle(
             style_fonts, sz, intervals, output_path,
             force_autohint=args.force_autohint,
-            fallback_style_fonts=fallback_style_fonts)
+            fallback_style_fonts=fallback_style_fonts,
+            reposition_marks=args.reposition_marks)
     print(f"\nTotal: {len(sizes)} files, {total_size / 1024 / 1024:.2f} MB", file=sys.stderr)
 
 
