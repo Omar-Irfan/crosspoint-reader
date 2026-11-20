@@ -30,18 +30,18 @@ The Dictionary setting only appears when at least one usable dictionary folder e
 
 Two ways to start a lookup while reading:
 
-- Open the reader menu (**Confirm**) and choose **Look Up**.
+- Open the reader menu (**Confirm**) and choose **Look Up**, its first item.
 - Or set **Settings → Controls → Front buttons → Menu long press** to "Dictionary", then hold **Confirm** (~0.4s) on the reading page.
 
 ### Selecting Text
 
 **On button-driven devices:**
 
-1. A selection cursor appears on a word. Use **Left/Right** to navigate between words in reading order, and the side **Up/Down** buttons to jump between lines or flip across nearby pages.
+1. A selection cursor appears on a word. Use **Left/Right** to navigate between words in reading order, and the side **Up/Down** buttons to jump between lines or flip across nearby pages. Holding a button keeps moving.
 2. Press **Confirm** (**Select**) to anchor the start of the selection.
 3. **Single word:** Press **Confirm** again immediately (**Look Up**) to look up the highlighted word.
 4. **Phrase / multiple words:** Use **Left/Right** or **Up/Down** to extend the highlighted selection across words, lines, or pages. Then press **Confirm** (**Look Up**).
-5. Press **Back** at any time to cancel and return to reading.
+5. Press **Back** to drop the anchor, or to cancel and return to reading.
 
 **On touchscreen devices:**
 
@@ -57,9 +57,36 @@ On the very first lookup with a dictionary (and again whenever the `.idx` or `.s
    For Arabic, after the word itself is checked in the `.syn`, Arabic words get Arabic fallbacks instead of English stems: shadda and tatweel removed, hamza on alef folded (أ إ آ ٱ → ا), attached particles removed (و ف ب ك ل س, ال, لل), and pronoun suffixes removed (ـه ـها ـهم ـكم ـنا ـني …), restoring the spelling a suffix changed (مدرستهم → مدرسة, كتبوه → كتبوا). Forms with the fewest changes are tried first. Every form is tried as a headword before any form is tried in the `.syn`, so `بكتابه` finds `كتاب` rather than a related word. Arabic punctuation (، ؛ ؟ ٪ ۔ ﴾ ﴿) is trimmed from the selected word like Latin punctuation.
 4. **Not found** — a short popup appears. Touchscreen devices return to reading; buttons-only devices return to word selection.
 
+## Arabic Word Breakdown
+
+On boards with PSRAM (for example X4 Pro and X4 Classic), an Arabic word's
+definition starts with a line that splits it into prefixes, stem and suffixes,
+with its root:
+
+    وَ + بِ + كِتاب + هم  (ك ت ب)
+
+When a word can be split two ways, both are shown (for example بسم). When the
+definition shown is for another form of the selected text, or for a phrase,
+the selected text is shown first. In a phrase gloss each word's root follows it.
+
+The breakdown needs `/.crosspoint/arabic_morph.txt` on the SD card. Build it
+from the Buckwalter Arabic Morphological Analyzer 1.0 data (GPL v2, (c) 2002
+QAMUS LLC and the Trustees of the University of Pennsylvania; LDC catalogue
+LDC2002L49, also bundled with GPL ports such as pyaramorph; the six files
+`dictPrefixes`, `dictSuffixes`, `dictStems`, `tableAB`, `tableAC`, `tableBC`),
+then copy the result to `/.crosspoint/arabic_morph.txt` on the SD card:
+
+    python3 scripts/build_arabic_morph.py <data folder> arabic_morph.txt
+
+The generated table is derived from that data and stays under GPL v2; it is not
+part of the firmware. From the first Arabic lookup after starting, its tables use
+about 210 KB of PSRAM for the session. Without the file, lookups work as before.
+Roots that the data files list under the wrong heading are left out rather than
+shown wrong.
+
 ## Phrase Gloss
 
-When a selected phrase is not itself a dictionary entry, each word (up to 16) is looked up on its own. The definition screen lists the words in order, each followed by its dictionary form when that differs (`العابدين — عابد`) and the first lines of its definition. With a merged dictionary, each word's lines start with the name of the source they came from (`[Wiktionary]`): the first source in the merged entry that has the word. A word with no entry is shown alone with a trailing dash. If no word is found, **Not found** appears. Glossed phrases are not saved to the vocabulary history. Selecting a phrase inside a definition glosses it the same way, and **Back** returns to the gloss.
+When a selected phrase is not itself a dictionary entry, each word (up to 16) is looked up on its own. The definition screen lists the words in order, each followed by its dictionary form when that differs (`العابدين — عابد`) and the first lines of its definition. Lines that only name another form of a word (`plural of …`, `jussive of …`) are skipped when the entry has real meanings, and with the word breakdown the section of the entry matching the word's stem is used. With a merged dictionary, each word's lines start with the name of the source they came from (`[Wiktionary]`): the first source in the merged entry that has the word. A word with no entry is shown alone with a trailing dash. If no word is found, **Not found** appears. Glossed phrases are not saved to the vocabulary history. Selecting a phrase inside a definition glosses it the same way, and **Back** returns to the gloss.
 
 ## Ask AI
 

@@ -1,6 +1,7 @@
 #include "HtmlToPlainText.h"
 
 #include <Epub/htmlEntities.h>
+#include <strings.h>
 
 #include <algorithm>
 #include <cctype>
@@ -132,6 +133,28 @@ void appendBreak(std::string& output, size_t& written, size_t count = 1) {
   while (existing++ < count) output[written++] = '\n';
 }
 
+// "style" or "script" when the tag at [start, end) opens one, else nullptr.
+const char* rawTextTag(const std::string& input, const size_t start, const size_t end) {
+  for (const char* name : {"style", "script"}) {
+    const size_t n = strlen(name);
+    if (end - start < n || strncasecmp(input.c_str() + start, name, n) != 0) continue;
+    const char after = start + n < end ? input[start + n] : '>';
+    if (after == '>' || after == '/' || std::isspace(static_cast<unsigned char>(after))) return name;
+  }
+  return nullptr;
+}
+
+// Position just after the "</name ...>" that closes a raw-text tag, or npos.
+size_t findClosingTag(const std::string& input, size_t from, const char* name) {
+  const size_t n = strlen(name);
+  for (size_t at = input.find("</", from); at != std::string::npos; at = input.find("</", at + 2)) {
+    if (strncasecmp(input.c_str() + at + 2, name, n) != 0) continue;
+    const size_t gt = input.find('>', at + 2 + n);
+    return gt == std::string::npos ? std::string::npos : gt + 1;
+  }
+  return std::string::npos;
+}
+
 }  // namespace
 
 std::string htmlToPlainText(std::string html, const char headingMarker) {
@@ -143,6 +166,12 @@ std::string htmlToPlainText(std::string html, const char headingMarker) {
       const size_t close = htmlTagEnd(html, i, html.size());
       if (close == std::string::npos) {
         html[written++] = html[i++];
+        continue;
+      }
+      // <style> and <script> hold code, not text (Wiktionary entries embed CSS).
+      if (const char* raw = rawTextTag(html, i + 1, close); raw && html[close - 1] != '/') {
+        const size_t end = findClosingTag(html, close + 1, raw);
+        i = end == std::string::npos ? html.size() : end;
         continue;
       }
       const TagBreak separator = tagBreak(html, i + 1, close);

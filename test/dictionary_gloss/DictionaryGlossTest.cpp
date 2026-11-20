@@ -66,3 +66,37 @@ TEST(DictionaryGloss, CutsOnUtf8Boundary) {
 }
 
 TEST(DictionaryGloss, EmptyWhenOnlyNoise) { EXPECT_EQ(DictionaryGloss::snippet("[X] y\nIPA: /a/\n", MARKER), ""); }
+
+// A merged entry for أهل: a jussive form of another verb first, the noun later.
+const std::string AHL =
+    "[Wiktionary] أهل\nأَهُلْ (ʔahul): first-person singular non-past active jussive of هَالَ (hāla)\n"
+    "[Wiktionary] أَهَل\nverbal noun of أَهِلَ (ʔahila) (form I)\nfamiliarization (with)\n"
+    "[Wiktionary] أَهْل\nfamily, household; people, kinfolk, relations\ninhabitants\n";
+
+TEST(DictionaryGloss, SkipsGrammaticalFormLines) {
+  EXPECT_EQ(DictionaryGloss::snippet(AHL, MARKER), "verbal noun of أَهِلَ (ʔahila) (form I); familiarization (with)");
+  // Used when nothing else is there.
+  EXPECT_EQ(DictionaryGloss::snippet("plural of كتاب\n", MARKER), "plural of كتاب");
+}
+
+TEST(DictionaryGloss, PrefersSectionMatchingStem) {
+  std::string source;
+  EXPECT_EQ(DictionaryGloss::snippet(AHL, MARKER, &source, "أَهل"),
+            "family, household; people, kinfolk, relations; inhabitants");
+  EXPECT_EQ(source, "Wiktionary");
+  // No section matches: the whole entry is used.
+  EXPECT_EQ(DictionaryGloss::snippet(AHL, MARKER, nullptr, "كِتاب"),
+            "verbal noun of أَهِلَ (ʔahila) (form I); familiarization (with)");
+}
+
+TEST(DictionaryGloss, MatchesStemsWrittenWithoutFathaBeforeAlef) {
+  const std::string plain = "[Wiktionary] كُتَّاب\nwriters\n[Wiktionary] كِتَاب\nbook\n[Wiktionary] اِسْتَقَالَ\nto resign\n";
+  EXPECT_EQ(DictionaryGloss::snippet(plain, MARKER, nullptr, "كِتاب"), "book");
+  EXPECT_EQ(DictionaryGloss::snippet(plain, MARKER, nullptr, "ٱِستَقال"), "to resign");
+}
+
+TEST(DictionaryGloss, MatchedSectionDoesNotBorrowTheNextOne) {
+  // The matched section only says "plural of": that line is used, not the next word's sense.
+  const std::string plain = "[Wiktionary] كُتُب\nplural of كِتَاب\n[Wiktionary] كَتَبَ\nto write\n";
+  EXPECT_EQ(DictionaryGloss::snippet(plain, MARKER, nullptr, "كُتُب"), "plural of كِتَاب");
+}

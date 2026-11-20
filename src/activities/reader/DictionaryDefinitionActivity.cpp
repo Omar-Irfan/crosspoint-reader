@@ -26,9 +26,11 @@
 #include "components/UITheme.h"
 #include "network/WifiPowerSaveGuard.h"
 #include "util/AiAssist.h"
+#include "util/ArabicBreakdown.h"
 #include "util/DictHtmlPages.h"
 #include "util/DictionaryGloss.h"
 #include "util/HtmlToPlainText.h"
+#include "util/StringUtils.h"
 
 namespace {
 
@@ -37,6 +39,8 @@ namespace {
 constexpr size_t MAX_LINE_BYTES = 191;
 constexpr float PLAIN_TEXT_LINE_SPACING = 2.0f;
 constexpr size_t HEAP_HEADROOM = 8 * 1024;
+// Ways a word may split shown on its definition (بسم: بَسَمَ, or بِ + سم).
+constexpr size_t BREAKDOWN_READINGS = 2;
 constexpr unsigned long MESSAGE_DURATION_MS = 1500;
 constexpr size_t SELECTION_PAGE_WINDOW = 3;
 constexpr unsigned long AI_HOLD_MS = 600;
@@ -58,6 +62,43 @@ void appendParagraph(std::string& html, const std::string_view text) {
   html += "<p>";
   TxtToHtml::appendEscapedHtml(html, text);
   html += "</p>";
+}
+
+// Puts what was selected (when the entry shown is another form of it, or a
+// phrase) and the word's breakdown above the definition. Skipped when the
+// heap cannot hold the combined text next to the current one.
+void prependLookupHeader(const char* query, const std::string& headword, const bool html, std::string& text) {
+  const std::string selected = Dictionary::cleanWord(query);
+  std::vector<std::string> lines;
+  if (StringUtils::asciiCaseCmp(selected.c_str(), headword.c_str()) != 0 || selected.find(' ') != std::string::npos) {
+    lines.push_back(selected);
+  }
+  for (const auto& reading : ArabicBreakdown::analyze(selected, BREAKDOWN_READINGS)) {
+    lines.push_back(ArabicBreakdown::line(reading));
+  }
+  if (lines.empty()) return;
+
+  std::string header;
+  for (size_t i = 0; i < lines.size(); ++i) {
+    const bool bold = i == 0 && lines[0] == selected;
+    if (html) {
+      header += bold ? "<p><b>" : "<p>";
+      TxtToHtml::appendEscapedHtml(header, lines[i]);
+      header += bold ? "</b></p>" : "</p>";
+    } else {
+      if (bold) header += DICTIONARY_PLAIN_HEADWORD_MARKER;
+      header += lines[i];
+      header += '\n';
+    }
+  }
+  if (!html) header += '\n';
+  // One exact allocation (an insert could double the string's capacity).
+  const size_t combinedBytes = header.size() + text.size();
+  const auto heap = HalMemory::getDefaultHeap();
+  if (heap.largestBlockBytes < combinedBytes + HEAP_HEADROOM) return;
+  header.reserve(combinedBytes);
+  header += text;
+  text.swap(header);
 }
 
 // The matn (the sentence around the selection, verbatim, or the selection
@@ -618,12 +659,15 @@ bool DictionaryDefinitionActivity::buildGloss(Dictionary& dictionary, const std:
       append(" \xE2\x80\x94 ");
       append(headword);
     }
+    const auto readings = ArabicBreakdown::analyze(cleaned, 1);
+    const std::string stem = readings.empty() ? std::string{} : readings.front().stem;
+    if (!readings.empty()) append(ArabicBreakdown::rootSuffix(readings.front()));
     closeHeading();
     const std::string plain = dictionary.definitionsAreHtml()
                                   ? htmlToPlainText(std::move(definition), DICTIONARY_PLAIN_HEADWORD_MARKER)
                                   : std::move(definition);
     std::string source;
-    const std::string snippet = DictionaryGloss::snippet(plain, DICTIONARY_PLAIN_HEADWORD_MARKER, &source);
+    const std::string snippet = DictionaryGloss::snippet(plain, DICTIONARY_PLAIN_HEADWORD_MARKER, &source, stem);
     if (snippet.empty()) continue;
     if (html) out += "<p>";
     if (!source.empty()) {  // which dictionary of a merged set the meaning came from
@@ -647,9 +691,13 @@ bool DictionaryDefinitionActivity::lookupOrGloss(Dictionary& dictionary, const c
                                                  std::string& text, std::string& headword,
                                                  Dictionary::LookupResult& result, bool* glossed) {
   if (glossed) *glossed = false;
-  if (dictionary.lookup(word, text, headword, &result)) return true;
+  if (dictionary.lookup(word, text, headword, &result)) {
+    prependLookupHeader(word, headword, html, text);
+    return true;
+  }
   if (result != Dictionary::LookupResult::NotFound || !buildGloss(dictionary, word, html, text, result)) return false;
   headword = word;
+  prependLookupHeader(word, headword, html, text);
   if (glossed) *glossed = true;
   return true;
 }

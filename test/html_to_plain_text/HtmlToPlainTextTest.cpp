@@ -98,4 +98,13 @@ TEST(HtmlToPlainText, SurvivesMalformedMarkup) {
   EXPECT_EQ(htmlToPlainText("<!-- comment -->kept", '\x01'), "kept");
 }
 
+TEST(HtmlToPlainText, DropsStyleAndScriptBlocks) {
+  EXPECT_EQ(htmlToPlainText("be left with <style>.mw-parser-output .x{font-style:italic}</style>debt", '\x01'),
+            "be left with debt");
+  EXPECT_EQ(htmlToPlainText("a<SCRIPT type=\"x\">var b = 1 < 2;</script>c", '\x01'), "ac");
+  EXPECT_EQ(htmlToPlainText("kept <style>never closed", '\x01'), "kept");
+  EXPECT_EQ(htmlToPlainText("<styles>not a style tag</styles>", '\x01'), "not a style tag");
+  EXPECT_EQ(htmlToPlainText("a<script src=\"x\"/>b", '\x01'), "ab");  // self-closing: nothing to skip
+}
+
 }  // namespace
