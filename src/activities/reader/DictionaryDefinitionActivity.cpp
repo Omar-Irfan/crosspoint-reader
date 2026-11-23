@@ -28,6 +28,7 @@
 #include "util/AiAssist.h"
 #include "util/ArabicBreakdown.h"
 #include "util/DictHtmlPages.h"
+#include "util/DictionaryFont.h"
 #include "util/DictionaryGloss.h"
 #include "util/HtmlToPlainText.h"
 #include "util/StringUtils.h"
@@ -101,21 +102,15 @@ void prependLookupHeader(const char* query, const std::string& headword, const b
   text.swap(header);
 }
 
-// The matn (the sentence around the selection, verbatim, or the selection
-// itself) and under it the answer, one paragraph per line so each line takes
-// its own direction: Arabic right, English left. The labels follow the
-// answer's language, not the UI language.
-std::string answerToHtml(const std::string& query, const std::string& context, const bool arabic,
-                         const std::string& answer) {
-  const std::string& matn = context.empty() ? query : context;
+// The selection in bold, front and centre, and under it the answer, one
+// paragraph per line so each line takes its own direction: Arabic right,
+// English left. The surrounding sentence is only sent to the AI, not shown.
+std::string answerToHtml(const std::string& query, const std::string& answer) {
   std::string html;
-  html.reserve(matn.size() + answer.size() + 96);
-  if (arabic) {
-    appendParagraph(html, "المتن: " + matn);
-  } else {
-    appendParagraph(html, "Text:");  // on the Arabic line it would render as ":Text"
-    appendParagraph(html, matn);
-  }
+  html.reserve(query.size() + answer.size() + 64);
+  html += "<p><b>";
+  TxtToHtml::appendEscapedHtml(html, query);
+  html += "</b></p>";
   size_t start = 0;
   while (start < answer.size()) {
     size_t end = answer.find('\n', start);
@@ -369,7 +364,7 @@ bool DictionaryDefinitionActivity::wrapText(Definition& next) {
   lines.clear();
   if (!reserveLines(next, definition.size() / 32 + 8)) return false;
 
-  const int fontId = SETTINGS.getReaderFontId();
+  const int fontId = dictionaryfont::fontId(renderer);
   if (!prepareFont(definition, fontId)) return false;
 
   const BodyArea body = bodyArea();
@@ -504,8 +499,8 @@ void DictionaryDefinitionActivity::cacheAnswer(const std::string& query, const s
 }
 
 void DictionaryDefinitionActivity::openAnswer(const std::string& answer, std::string context, const bool arabic) {
-  auto activity = makeUniqueNoThrow<DictionaryDefinitionActivity>(
-      renderer, mappedInput, lookup->query, answerToHtml(lookup->query, context, arabic, answer), true);
+  auto activity = makeUniqueNoThrow<DictionaryDefinitionActivity>(renderer, mappedInput, lookup->query,
+                                                                  answerToHtml(lookup->query, answer), true);
   if (!activity) {
     showMessage(StrId::STR_DICT_LOW_MEMORY);
     return;
@@ -582,7 +577,7 @@ bool DictionaryDefinitionActivity::showAnswerInPlace(const std::string& answer, 
   RenderLock lock;
   messageVisible = false;
   content.releasePayload();
-  content.text = answerToHtml(content.headword, aiContext, arabic, answer);
+  content.text = answerToHtml(content.headword, answer);
   content.currentPage = 0;
   if (!prepareDefinition(content)) {
     showMessage(StrId::STR_DICT_LOW_MEMORY);
@@ -808,7 +803,7 @@ void DictionaryDefinitionActivity::navigateDefinition(const bool back) {
 
 bool DictionaryDefinitionActivity::buildPlainSelectionPages() {
   // Only the selection window gets packed word arenas; the definition keeps its cheap line spans.
-  const int fontId = SETTINGS.getReaderFontId();
+  const int fontId = dictionaryfont::fontId(renderer);
   const int lineHeight = renderer.getLineHeight(fontId, PLAIN_TEXT_LINE_SPACING);
   const int pageCount = std::min<int>(SELECTION_PAGE_WINDOW, content.totalPages - content.selectionPage);
   const size_t scratchBytes =
@@ -1084,7 +1079,7 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
   // Body: two-pass draw inside a prewarm scope (same pattern as the reader's
   // renderContents) so SD-card font glyphs load from SD in one batch instead
   // of one on-demand overflow read per character on every page turn.
-  const int fontId = SETTINGS.getReaderFontId();
+  const int fontId = dictionaryfont::fontId(renderer);
   const BodyArea body = bodyArea();
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();

@@ -148,6 +148,9 @@ struct Settings {
   bool touchReaderControls = true;
   int getReaderFontId() const { return 0; }
 } SETTINGS;
+namespace dictionaryfont {
+template <class Renderer> int fontId(const Renderer&) { return SETTINGS.getReaderFontId(); }
+}  // namespace dictionaryfont
 struct MappedInputManager {
   enum class Button { Back };
   bool touch = false;

@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include "CrossPointSettings.h"
+#include "DictionaryFont.h"
 
 namespace {
 
@@ -225,7 +226,7 @@ bool buildDictionaryHtmlPages(GfxRenderer& renderer, const std::string& definiti
     // handling, the only path that dereferences it.
     std::unique_ptr<ChapterHtmlSlimParser> parser;
     parser = makeUniqueNoThrow<ChapterHtmlSlimParser>(
-        nullptr, tmpPath, renderer, SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+        nullptr, tmpPath, renderer, dictionaryfont::fontId(renderer), SETTINGS.getReaderLineCompression(),
         SETTINGS.extraParagraphSpacing, SETTINGS.effectiveAlignment(false), viewportWidth, viewportHeight,
         SETTINGS.hyphenationEnabled, SETTINGS.focusReadingEnabled,
         [&pagesOut, &parser, &retainedElements, &limitReason](std::unique_ptr<Page> page, uint16_t, uint16_t,

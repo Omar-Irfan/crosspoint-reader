@@ -17,12 +17,12 @@ namespace {
 constexpr const char* CONFIG_PATH = "/.crosspoint/ai.json";
 constexpr size_t MAX_CONFIG_BYTES = 1024;
 constexpr const char* ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-constexpr const char* ANTHROPIC_DEFAULT_MODEL = "claude-opus-5-5";
+constexpr const char* ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-5-5";
 constexpr const char* GEMINI_URL_PREFIX = "https://generativelanguage.googleapis.com/v1beta/models/";
 constexpr const char* GEMINI_DEFAULT_MODEL = "gemini-3.8-flash";
 constexpr uint32_t REQUEST_TIMEOUT_MS = 20000;
 // Room for a short reply plus the little thinking low effort uses.
-constexpr int MAX_TOKENS = 600;
+constexpr int MAX_TOKENS = 900;
 // The response body is streamed into one buffer of at most this size; a
 // larger body is abandoned rather than grown.
 constexpr size_t MAX_RESPONSE_BYTES = 8 * 1024;
@@ -77,25 +77,31 @@ constexpr const char* ROOT_CAS =
 constexpr const char* PROMPT_ENGLISH =
     "You help a Muslim learner of Arabic reading a classical or Islamic book on a small e-ink screen. "
     "They know the religion's basics, common Islamic terms and everyday Arabic; what they lack is the "
-    "harder vocabulary and how the sentence fits together. You get a word or phrase they selected and "
-    "the passage (matn) it came from, which is already shown above your reply. Write what goes under "
+    "harder vocabulary and how the sentence fits together. You get a word, phrase or sentence they selected and "
+    "the passage (matn) it came from; the selection is already shown above your reply. Write what goes under "
     "it, in plain text, no Markdown, two short lines of about 50 words in all, each starting with its "
     "label:\n"
-    "Translation: a close, literal-leaning English translation of the passage, following the Arabic.\n"
-    "Explanation: the point of the passage and any nuance a learner could miss, and the selection's "
-    "sense here if it is not obvious. Never explain what such a reader already knows (who the Prophet "
+    "Translation: a close, literal-leaning English translation of the whole selection (a word, phrase or "
+    "sentence), as it is used in this passage.\n"
+    "Explanation: the point of the selection and any nuance a learner could miss, without repeating the "
+    "translation. Never explain what such a reader already knows (who the Prophet "
     "is, what salah is) or restate the translation.\n"
+    "Rely on the text provided and what is reliably known; never attribute a view to the author that the "
+    "text does not show (it may quote someone else), and say \"I am not sure\" rather than guess. "
     "Do not repeat the passage. No grammatical analysis (i'rab), no notes. Write honorifics as their "
     "symbols (ﷺ, ﷻ).";
 
 constexpr const char* PROMPT_ARABIC =
     "أنت تساعد متعلمًا مسلمًا للعربية يقرأ كتابًا تراثيًا أو شرعيًا على شاشة حبر إلكتروني صغيرة. هو يعرف "
-    "أساسيات الدين والمصطلحات الشائعة والعربية المألوفة، وينقصه الغريب من الألفاظ وفهم ترابط الجملة. تصلك "
-    "كلمة أو عبارة اختارها والمتن الذي وردت فيه، والمتن معروض فوق جوابك. اكتب الشرح الذي تحته فقط، "
-    "بالعربية الفصحى، بنص عادي دون تنسيق، في سطر واحد يبدأ بـ «الشرح:» نحو أربعين كلمة: مقصود المتن وما "
-    "قد يفوت المتعلم من دقائقه، ومعنى المختار فيه وغريب ألفاظه إن لم يكن ظاهرًا. لا تشرح ما يعرفه مثله "
-    "(من هو رسول الله ﷺ، ما الصلاة)، ولا تعِد المتن.\n"
-    "لا إعراب ولا ملاحظات نحوية. اكتب صيغ التعظيم برموزها (ﷺ، ﷻ).";
+    "أساسيات الدين والمصطلحات الشائعة والعربية المألوفة، وينقصه الغريب من الألفاظ. تصلك كلمة أو عبارة أو جملة "
+    "اختارها والمتن الذي وردت فيه، والمختار معروض فوق جوابك. اكتب ما تحته فقط، بالعربية الفصحى، بنص عادي "
+    "دون تنسيق، في سطرين، كل سطر نحو ثلاثين كلمة:\n"
+    "المختار: معنى المختار كاملًا، كلمةً كان أو عبارةً أو جملةً، في هذا السياق تحديدًا، مع جذر الغريب منه إن أفاد.\n"
+    "المقصود: مؤدى المختار وما قد يفوت المتعلم من دقائقه، دون تكرار السطر الأول.\n"
+    "اعتمد على النص المقدَّم وما هو معلوم يقينًا من اللغة؛ ولا تنسب إلى المؤلف قولًا أو رأيًا لا يدل "
+    "عليه النص، فقد يكون المتن حكايةً لقول غيره. وإن لم تتيقن من معنى فقل «لا أجزم» ولا تخمّن. لا تشرح ما "
+    "يعرفه مثله (من هو رسول الله ﷺ، ما الصلاة)، ولا تعِد المتن. لا إعراب ولا ملاحظات نحوية. اكتب صيغ "
+    "التعظيم برموزها (ﷺ، ﷻ).";
 
 // Anthropic models that accept server-side refusal fallbacks; others (e.g.
 // Haiku) reject the parameter, so it is only sent to these.

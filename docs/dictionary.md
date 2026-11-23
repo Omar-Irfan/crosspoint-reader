@@ -99,10 +99,10 @@ An optional on-demand explanation from the Claude or Gemini API, for when the di
 Only `api_key` is required.
 
 - `provider`: `anthropic` (default) or `gemini`. With Gemini, use a Google AI Studio key.
-- `model`: defaults to `claude-opus-5-5` for Anthropic and `gemini-3.8-flash` for Gemini. Any model name the provider accepts works; check the provider's current model list and prices.
+- `model`: defaults to `claude-sonnet-5-5` for Anthropic and `gemini-3.8-flash` for Gemini. Any model name the provider accepts works; check the provider's current model list and prices.
 - `explain`: `arabic` (default) or `english`, the language of the first explanation.
 
-The reply is laid out like a matn with its sharh underneath. **المتن** (Text) is the sentence around your selection (up to about 30 words either side, within the paragraph), copied from the book; the model never rewrites it. Without it (low memory, or a word looked up inside a definition) the matn is the selected text. Under it comes **الشرح**, the point of the passage and any hard words, or in English a literal-leaning **Translation** and then an **Explanation**. Answers assume a reader who knows the religion's basics, skip i'rab, and write honorifics as ﷺ and ﷻ.
+The reply shows what you selected in bold, so it is always front and centre, and under it the explanation. In Arabic that is two short lines: **المختار**, the meaning of the whole selection (a word, phrase or sentence) in this context with the root of a hard word, and **المقصود**, the point and any nuance a learner could miss. In English it is a literal-leaning **Translation** and then an **Explanation**. The model sees the selection and the sentence around it (up to about 30 words either side, within the paragraph), but only the selection is shown. It is told not to credit the author with a view the text does not show, and to say "لا أجزم" instead of guessing. Answers assume a reader who knows the religion's basics, skip i'rab, and write honorifics as ﷺ and ﷻ.
 
 With the file present, the definition screen's Confirm hint reads **Look/AI**: press Confirm to select words as usual, or **hold Confirm** to ask about the word or phrase you looked up. On touch devices you can also tap **Ask AI** at the right end of the definition's header. The reader joins Wi-Fi (showing the network list if not connected) and sends the selected text to the chosen provider's API (Anthropic or Google), together with the sentence it came from (not for words looked up from inside a definition). Nothing is sent unless you ask.
 
@@ -133,7 +133,7 @@ A readable `.ifo` file with a missing or empty `sametypesequence` enables the ty
 
 Inline entries with only empty or binary fields are skipped. If all matching entries are empty, the lookup reports no match.
 
-Definitions are drawn in your reading font. Dictionaries may use IPA symbols (e.g. `ˈ ː ɹ ɪ ʊ`…) as pronunciation guide, which built-in reader fonts do not include, so they are shown as `�`. To see them, install an [SD card font](./sd-card-fonts.md) that covers IPA and select it as the reading font.
+Definitions and Ask AI answers are drawn in your reading font, capped at 18 pt so a large book size does not make lookups unwieldy. Dictionaries may use IPA symbols (e.g. `ˈ ː ɹ ɪ ʊ`…) as pronunciation guide, which built-in reader fonts do not include, so they are shown as `�`. To see them, install an [SD card font](./sd-card-fonts.md) that covers IPA and select it as the reading font.
 
 - **Left/Right** or side **Up/Down** — previous / next page
 - **Confirm** — select words or a phrase inside the definition, then choose **Look Up**
