@@ -62,6 +62,13 @@ constexpr Anchor anchorFor(const uint32_t cp) {
   switch (cp) {
     case 0x05BC:  // dagesh / mapiq / shuruk dot: inside the letter body
     case 0x05BA:  // holam haser for vav: straight above the vav stem
+    case 0x064D:  // Arabic kasratan, kasra and the other below-marks: some fonts
+    case 0x0650:  // sit one pixel above the baseline, where the raise would
+    case 0x0655:  // lift them over the letter and make a kasra read as a fatha
+    case 0x0656:
+    case 0x065C:
+    case 0x06E3:
+    case 0x06ED:
       return Anchor::CenterNative;
     case 0x05C1:  // shin dot: over the letter's right arm
       return Anchor::RightNative;
