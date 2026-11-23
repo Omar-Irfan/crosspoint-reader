@@ -270,6 +270,7 @@ struct Settings {
     return spec;
   }
 } SETTINGS;
+ReaderRenderSpec renderSpecFor(int width, int height) { return SETTINGS.readerRenderSpec(width, height); }
 struct SavedClippings {
   Clipping clipping;
   bool hasClippings() const { return true; }

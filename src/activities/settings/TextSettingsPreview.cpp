@@ -33,7 +33,7 @@ void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, in
   layout.lines.clear();
 
   BlockStyle style;
-  style.alignment = toCssAlign(SETTINGS.paragraphAlignment);
+  style.alignment = toCssAlign(SETTINGS.effectiveAlignment(false));
   style.textAlignDefined = true;  // honor the user's choice; RTL auto-detected from text
 
   ParsedText parsed(SETTINGS.hyphenationEnabled != 0, SETTINGS.focusReadingEnabled != 0, style,
@@ -101,7 +101,7 @@ void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previ
                        .screenMargin = SETTINGS.screenMargin,
                        .textWidth = textWidth,
                        .lineCompression = compression,
-                       .alignment = SETTINGS.paragraphAlignment,
+                       .alignment = SETTINGS.effectiveAlignment(false),
                        .extraParagraphSpacing = SETTINGS.extraParagraphSpacing != 0,
                        .paragraphIndentSpaces = SETTINGS.paragraphIndentSpaces,
                        .characterSpacing = SETTINGS.getCharacterSpacing(),

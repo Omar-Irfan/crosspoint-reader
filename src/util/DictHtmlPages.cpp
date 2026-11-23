@@ -226,7 +226,7 @@ bool buildDictionaryHtmlPages(GfxRenderer& renderer, const std::string& definiti
     std::unique_ptr<ChapterHtmlSlimParser> parser;
     parser = makeUniqueNoThrow<ChapterHtmlSlimParser>(
         nullptr, tmpPath, renderer, SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-        SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
+        SETTINGS.extraParagraphSpacing, SETTINGS.effectiveAlignment(false), viewportWidth, viewportHeight,
         SETTINGS.hyphenationEnabled, SETTINGS.focusReadingEnabled,
         [&pagesOut, &parser, &retainedElements, &limitReason](std::unique_ptr<Page> page, uint16_t, uint16_t,
                                                               uint32_t) {

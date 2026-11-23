@@ -13,6 +13,7 @@
 #include <I18n.h>
 #include <Memory.h>
 #include <PNGdec.h>
+#include <TrustedTime.h>
 #include <Xtc.h>
 
 #include <algorithm>
@@ -25,11 +26,14 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "RecentBooksStore.h"
 #include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/BadrLabsLogo.h"
 #include "images/MoonIcon.h"
+#include "util/BookProgress.h"
+#include "util/ReadingActivityView.h"
 
 namespace {
 // Metalio: B/W sleep images use the full 0xF7 waveform instead of HALF (two
@@ -739,6 +743,8 @@ void SleepActivity::onEnter() {
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
       return renderBlankSleepScreen();
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::READING_ACTIVITY):
+      return renderReadingActivitySleepScreen();
     case (CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM):
       return renderCustomSleepScreen();
     case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER):
@@ -1111,5 +1117,63 @@ void SleepActivity::renderLastScreenSleepScreen() const {
 
 void SleepActivity::renderBlankSleepScreen() const {
   renderer.clearScreen();
+  renderer.displayBuffer(kSleepClean);
+}
+
+// Reading Activity: the 18-week grid on top, today and the last week in plain
+// numbers, when you read most, and the book you are in. Always light on dark
+// text so the shades stay readable.
+void SleepActivity::renderReadingActivitySleepScreen() const {
+  using namespace readingview;
+  renderer.clearScreen();
+
+  const int width = renderer.getScreenWidth();
+  const int height = renderer.getScreenHeight();
+  readinglog::Summary summary;
+  readinglog::load(trustedtime::trustedNow(), summary);
+
+  if (!summary.valid) {
+    renderer.drawCenteredText(UI_10_FONT_ID, height / 2 - 10, tr(STR_NO_READING_YET));
+    renderer.displayBuffer(kSleepClean);
+    return;
+  }
+
+  drawGrid(renderer, (width - GRID_WIDTH) / 2, 150, summary);
+
+  char duration[32];
+  char line[96];
+  formatDuration(summary.seconds[summary.today - summary.startDay], duration, sizeof(duration));
+  renderer.drawCenteredText(UI_10_FONT_ID, 395, tr(STR_TODAY));
+  renderer.drawCenteredText(UI_12_FONT_ID, 430, duration, true, EpdFontFamily::BOLD);
+
+  int daysRead = 0;
+  const uint32_t weekSeconds = lastSevenDays(summary, daysRead);
+  formatDuration(weekSeconds, duration, sizeof(duration));
+  snprintf(line, sizeof(line), "%s: %d %s, %s", tr(STR_LAST_7_DAYS), daysRead, tr(STR_DAYS_READ), duration);
+  renderer.drawCenteredText(UI_10_FONT_ID, 500, line);
+
+  char peak[32];
+  formatPeakHours(summary, peak, sizeof(peak));
+  if (peak[0] != '\0') {
+    renderer.drawLine(60, 560, width - 60, 560, true);
+    snprintf(line, sizeof(line), "%s: %s", tr(STR_MOST_READING), peak);
+    renderer.drawCenteredText(UI_10_FONT_ID, 590, line);
+  }
+
+  const auto& recent = RECENT_BOOKS.getBooks();
+  if (!recent.empty()) {
+    const std::string title = renderer.truncatedText(UI_12_FONT_ID, recent.front().title.c_str(), width - 80);
+    renderer.drawCenteredText(UI_12_FONT_ID, 680, title.c_str());
+    const int percent = loadBookProgress(recent.front().path);
+    if (percent >= 0) {
+      const int barLeft = 60;
+      const int barWidth = width - 120;
+      renderer.drawRect(barLeft, 735, barWidth, 12, true);
+      renderer.fillRect(barLeft, 735, barWidth * std::min(percent, 100) / 100, 12, true);
+      snprintf(line, sizeof(line), "%d%%", percent);
+      renderer.drawCenteredText(UI_10_FONT_ID, 757, line);
+    }
+  }
+
   renderer.displayBuffer(kSleepClean);
 }
