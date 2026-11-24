@@ -782,6 +782,7 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle, cons
       if (paragraphEnd) currentTextBlock->resetFirstLineIndent();
       // The reused block may have been created on the other side of a heading boundary.
       currentTextBlock->setHyphenationEnabled(blockHyphenationEnabled());
+      currentTextBlock->setParagraphIndentSpaces(blockParagraphIndentSpaces());
       // The stack accumulates horizontal margins and text properties from ancestors.
       // Vertical margins are per-element and not inherited through the stack, but
       // container elements deposit their vertical margins on the empty block when they
@@ -815,13 +816,13 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle, cons
   if (stopRequested) return;
   dropCap.firstLetterPending = false;
   inlineSize = InlineSizeState{};
-  currentTextBlock =
-      makeUniqueNoThrow<ParsedText>(blockHyphenationEnabled(), focusReadingEnabled, blockStyle, paragraphIndentSpaces);
+  currentTextBlock = makeUniqueNoThrow<ParsedText>(blockHyphenationEnabled(), focusReadingEnabled, blockStyle,
+                                                   blockParagraphIndentSpaces());
   if (!currentTextBlock) {
     // Evict rebuildable caches and retry once before failing the build.
     freeink::MemoryManager::instance().ensureFree(4 * 1024);
     currentTextBlock = makeUniqueNoThrow<ParsedText>(blockHyphenationEnabled(), focusReadingEnabled, blockStyle,
-                                                     paragraphIndentSpaces);
+                                                     blockParagraphIndentSpaces());
   }
   if (!currentTextBlock) {
     LOG_ERR("EHP", "OOM: ParsedText");
@@ -1599,7 +1600,10 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                                            : TABLE_CELL_HORIZONTAL_PADDING;
     tableCellBlockStyle.paddingTop = padding(cssStyle.paddingTop, self->viewportHeight / 4);
     tableCellBlockStyle.paddingBottom = padding(cssStyle.paddingBottom, self->viewportHeight / 4);
-    tableCellBlockStyle.textAlignDefined = true;
+    // A guessed Left (no text-align and no dir anywhere) is start-aligned, so an RTL
+    // paragraph inside the cell still goes to the right.
+    tableCellBlockStyle.textAlignDefined =
+        cssStyle.hasTextAlign() || self->effectiveTextAlignDefined || cssStyle.hasDirection();
     tableCellBlockStyle.alignment =
         cssStyle.hasTextAlign()
             ? cssStyle.textAlign
@@ -2833,6 +2837,8 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
   // returns early in startElement without ever pushing a context (see the
   // hasDisplay()/CssDisplay::None branch above), so its closing tag must not pop
   // the *parent* list's context out from under still-unprocessed siblings.
+  // The pop comes after the block-close above, so bare text right after </ul> starts
+  // flush (it usually continues the paragraph); a following <p> gets the body indent.
   if ((strcmp(name, "ul") == 0 || strcmp(name, "ol") == 0) && !self->listStack.empty() &&
       self->listStack.back().depth == self->depth) {
     self->listStack.pop_back();
@@ -2878,8 +2884,8 @@ bool ChapterHtmlSlimParser::beginParse() {
   tableLineVisibleOffsets.clear();
 
   auto paragraphAlignmentBlockStyle = BlockStyle();
-  paragraphAlignmentBlockStyle.textAlignDefined = true;
   const auto align = rootBlockStyle.alignment;
+  paragraphAlignmentBlockStyle.textAlignDefined = BlockStyle::userAlignmentIsExplicit(align);
   paragraphAlignmentBlockStyle.alignment = align;
   startNewTextBlock(paragraphAlignmentBlockStyle);
 

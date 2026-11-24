@@ -139,7 +139,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     CENTER_ALIGN = 2,
     RIGHT_ALIGN = 3,
     BOOK_STYLE = 4,
-    AUTO_ALIGN = 5,  // Right for RTL books, Justify otherwise
+    AUTO_ALIGN = 5,  // Right for RTL books, Left (start-aligned) otherwise
     PARAGRAPH_ALIGNMENT_COUNT
   };
 
@@ -522,7 +522,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   ReaderRenderSpec readerRenderSpec(uint16_t viewportWidth, uint16_t viewportHeight, bool rtlBook) const;
   // The alignment to lay out with; resolves AUTO_ALIGN for the book direction.
   uint8_t effectiveAlignment(bool rtlBook) const {
-    return paragraphAlignment == AUTO_ALIGN ? (rtlBook ? RIGHT_ALIGN : JUSTIFIED) : paragraphAlignment;
+    return paragraphAlignment == AUTO_ALIGN ? (rtlBook ? RIGHT_ALIGN : LEFT_ALIGN) : paragraphAlignment;
   }
 
   static const char* getFilePath() { return "/.crosspoint/settings.json"; }
