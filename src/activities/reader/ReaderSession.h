@@ -9,6 +9,10 @@ class ReaderSession {
   void noteTurn(bool forward, bool succeeded);
   void onRenderComplete(uint32_t monotonicMs, int64_t trustedEpoch, int progressBp);
   void reset();
+  // Active reading time since the last take, capped per page, including the page
+  // being read now; clears it. The epoch is the last render (0 when the clock was
+  // untrusted), the day to credit.
+  uint32_t takeTrackedSeconds(uint32_t nowMs, int64_t& epochOut);
 
   bool isEmitWorthy() const { return startEpoch > 0 && duration >= 10 && endTime() > startEpoch; }
   int64_t startTime() const { return startEpoch; }
@@ -24,6 +28,7 @@ class ReaderSession {
   int64_t anchorEpoch = 0;
   int64_t startEpoch = 0;
   uint32_t duration = 0;
+  uint32_t trackedSeconds = 0;
   uint16_t anchorProgress = 0;
   uint16_t startProgress = 0;
   uint16_t endProgress = 0;

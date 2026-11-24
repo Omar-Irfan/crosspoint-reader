@@ -5,6 +5,8 @@
 struct DictionarySettingsStub {
   bool extraParagraphSpacing = false;
   uint8_t paragraphAlignment = 0;
+  uint8_t fontPointSize = 16;
+  uint8_t effectiveAlignment(bool) const { return paragraphAlignment; }
   bool hyphenationEnabled = false;
   bool focusReadingEnabled = false;
   uint8_t wordSpacing = 100;

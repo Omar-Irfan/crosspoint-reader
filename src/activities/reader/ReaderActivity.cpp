@@ -19,6 +19,7 @@
 #include "SdCardFontSystem.h"
 #include "XtcReaderActivity.h"
 #include "util/PluginEvents.h"
+#include "util/ReadingLog.h"
 
 ReaderActivity::ReaderActivity(const char* name, GfxRenderer& renderer, MappedInputManager& mappedInput,
                                std::string bookPath, const bool allowFastInitialRefresh)
@@ -128,7 +129,17 @@ void ReaderActivity::onExit() {
 
 void ReaderActivity::prepareForSleep() { flushReaderSession(); }
 
+// Credits the time read this session to the reading log. Separate from the plugin
+// emit below, which may be skipped when nothing subscribes.
+void ReaderActivity::recordReadingTime() {
+  int64_t trackedAt = 0;
+  const uint32_t trackedSeconds = readerSession.takeTrackedSeconds(millis(), trackedAt);
+  if (trackedSeconds > 0 && trackedAt > 0) readinglog::add(trackedAt, trackedSeconds);
+}
+
 void ReaderActivity::flushReaderSession() {
+  recordReadingTime();
+
   if (!readerSession.isEmitWorthy() || !pluginevents::anySubscriber(pluginevents::Event::ReaderSession)) {
     readerSession.reset();
     return;

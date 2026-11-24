@@ -44,6 +44,8 @@ struct ClippingResult {
   enum class Action : uint8_t { Clip, Lookup, Bookmark };
   Action action = Action::Clip;
   std::string text;
+  // Lookup only: the sentence around the selection (same page), for Ask AI.
+  std::string context;
   uint16_t startPageOffset = 0;
   uint16_t endPageOffset = 0;
   uint16_t startWordIndex = 0;

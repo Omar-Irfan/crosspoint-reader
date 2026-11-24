@@ -9,6 +9,7 @@
 #include "CrossPointSettings.h"
 #include "DictionaryDefinitionActivity.h"
 #include "components/UITheme.h"
+#include "util/AiAssist.h"
 
 namespace {
 
@@ -57,7 +58,10 @@ void DictionaryWordSelectActivity::performLookup() {
   std::string definition;
   std::string headword;
   Dictionary::LookupResult result = Dictionary::LookupResult::NotFound;
-  const bool found = ok && dict.lookup(lookupText.c_str(), definition, headword, &result);
+  bool gloss = false;
+  const bool found =
+      ok && DictionaryDefinitionActivity::lookupOrGloss(dict, lookupText.c_str(), dict.definitionsAreHtml(), definition,
+                                                        headword, result, &gloss);
 
   if (found) {
     {
@@ -65,13 +69,15 @@ void DictionaryWordSelectActivity::performLookup() {
       popup = Popup::None;
       page.reset();
     }
-    if (SETTINGS.vocabularyHistoryEnabled &&
+    if (SETTINGS.vocabularyHistoryEnabled && !gloss &&
         !VocabularyStore::append(vocabulary, lookupText, headword, definition, dict.definitionsAreHtml())) {
       LOG_ERR("VOCAB", "Could not save successful dictionary lookup");
     }
     auto activity = makeUniqueNoThrow<DictionaryDefinitionActivity>(renderer, mappedInput, std::move(headword),
                                                                     std::move(definition), dict.definitionsAreHtml());
-    if (!activity || !activity->enableLookup(dict, std::move(lookupText))) {
+    const bool lookupReady = activity && activity->enableLookup(dict, std::move(lookupText));
+    if (lookupReady && AiAssist::isConfigured()) activity->enableAi(std::move(context));
+    if (!lookupReady) {
       LOG_ERR("DICT", "OOM: definition activity");
       popup = Popup::Error;
       popupMsg = StrId::STR_DICT_LOW_MEMORY;

@@ -20,6 +20,7 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
     values[CrossPointSettings::QUICK_RESUME] = StrId::STR_QUICK_RESUME;
     values[CrossPointSettings::TRANSPARENT_CUSTOM] = StrId::STR_TRANSPARENT;
     values[CrossPointSettings::COVER_TRANSPARENT] = StrId::STR_COVER_TRANSPARENT;
+    values[CrossPointSettings::READING_ACTIVITY] = StrId::STR_READING_ACTIVITY;
     return values;
   }();
   static constexpr auto STATUS_BAR_CLOCK_VALUES = [] {
@@ -98,7 +99,7 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
            .withTextSettings());
   emit(SettingInfo::Enum(StrId::STR_PARA_ALIGNMENT, &CrossPointSettings::paragraphAlignment,
                          {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER, StrId::STR_ALIGN_RIGHT,
-                          StrId::STR_BOOK_S_STYLE},
+                          StrId::STR_BOOK_S_STYLE, StrId::STR_ALIGN_AUTO},
                          "paragraphAlignment", StrId::STR_CAT_READER)
            .withTextSettings());
   emit(SettingInfo::Toggle(StrId::STR_EMBEDDED_STYLE, &CrossPointSettings::embeddedStyle, "embeddedStyle",

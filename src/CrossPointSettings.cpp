@@ -264,7 +264,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   fontFamily = NOTOSANS;
   // These controls use board-specific display-index mappings and are skipped by
   // the generic settings loop. Persisted action IDs remain stable across boards.
-  longPressMenuFunction = clamp(doc["longPressMenuFunction"] | (uint8_t)LP_MENU_DISABLED,
+  longPressMenuFunction = clamp(doc["longPressMenuFunction"] | DEFAULT_LONG_PRESS_MENU,
                                 (uint8_t)LONG_PRESS_MENU_FUNCTION_COUNT, (uint8_t)LP_MENU_DISABLED);
   shortPwrBtn = clamp(doc["shortPwrBtn"] | (uint8_t)IGNORE, (uint8_t)SHORT_PWRBTN_COUNT, (uint8_t)IGNORE);
   const uint8_t legacyDoublePwrBtn = doc["doubleClickPwrLight"].isNull()         ? defaultDoublePwrBtn()
@@ -339,8 +339,8 @@ CrossPointSettings::StatusBarSpec CrossPointSettings::statusBarSpec() const {
   return spec;
 }
 
-ReaderRenderSpec CrossPointSettings::readerRenderSpec(const uint16_t viewportWidth,
-                                                      const uint16_t viewportHeight) const {
+ReaderRenderSpec CrossPointSettings::readerRenderSpec(const uint16_t viewportWidth, const uint16_t viewportHeight,
+                                                      const bool rtlBook) const {
   ReaderRenderSpec spec;
   spec.fontId = getReaderFontId();
   spec.lineCompression = getReaderLineCompression();
@@ -348,7 +348,7 @@ ReaderRenderSpec CrossPointSettings::readerRenderSpec(const uint16_t viewportWid
   spec.wordSpacingPercent = wordSpacing;
   spec.extraParagraphSpacing = extraParagraphSpacing != 0;
   spec.paragraphIndentSpaces = paragraphIndentSpaces;
-  spec.paragraphAlignment = paragraphAlignment;
+  spec.paragraphAlignment = effectiveAlignment(rtlBook);
   spec.viewportWidth = viewportWidth;
   spec.viewportHeight = viewportHeight;
   spec.hyphenationEnabled = hyphenationEnabled != 0;

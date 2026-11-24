@@ -25,6 +25,18 @@ TEST(AnchorFor, PositionSensitiveNiqqud) {
   EXPECT_EQ(anchorFor(0x05B9), Anchor::LeftNative);    // holam
 }
 
+TEST(AnchorFor, ArabicBelowMarksKeepFontNativeHeight) {
+  EXPECT_EQ(anchorFor(0x0650), Anchor::CenterNative);         // kasra
+  EXPECT_EQ(anchorFor(0x064D), Anchor::CenterNative);         // kasratan
+  EXPECT_EQ(anchorFor(0x0656), Anchor::CenterNative);         // subscript alef
+  EXPECT_EQ(raiseAboveBase(anchorFor(0x0650), 5, 4, 20), 0);  // 1 px above the baseline: not lifted
+}
+
+TEST(AnchorFor, ArabicAboveMarksStillRaised) {
+  EXPECT_EQ(anchorFor(0x064E), Anchor::CenterRaised);  // fatha
+  EXPECT_EQ(anchorFor(0x0651), Anchor::CenterRaised);  // shadda
+}
+
 TEST(AnchorFor, EverythingElseKeepsCentreRaisedDefault) {
   EXPECT_EQ(anchorFor(0x05B0), Anchor::CenterRaised);  // Hebrew sheva
   EXPECT_EQ(anchorFor(0x05B7), Anchor::CenterRaised);  // Hebrew patach

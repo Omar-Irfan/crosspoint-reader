@@ -208,13 +208,13 @@ Books cannot be removed from your device through Calibre. Use the web interface 
 
 ### 3.6 Settings
 
-Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **Library**, and **Connectivity**. System contains language, keyboard layouts, hidden-file visibility, file-extension visibility, Clock (where available), firmware updates, and About. Library contains Use Book Metadata, Hide New Files in Recent, Clear Read Books from Recent List, Move Finished Books to Read Folder, and Refresh Library. Time to Sleep is under Display; Clear Reading Cache is under Reader. Connectivity contains Wi-Fi, Bluetooth Page Turner, CrossPoint Sync, OPDS, and the Plugins toggle. The options below describe these settings.
+Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **Library**, and **Connectivity**. System contains language, keyboard layouts, hidden-file visibility, file-extension visibility, Clock (where available), firmware updates, Reading Activity, and About. Library contains Use Book Metadata, Hide New Files in Recent, Clear Read Books from Recent List, Move Finished Books to Read Folder, and Refresh Library. Time to Sleep is under Display; Clear Reading Cache is under Reader. Connectivity contains Wi-Fi, Bluetooth Page Turner, CrossPoint Sync, OPDS, and the Plugins toggle. The options below describe these settings.
 
 #### 3.6.1 Display
 
 - **Sleep Screen**: Which sleep screen to display when the device sleeps:
   
-  - "Dark" (default) - The default dark Crosspoint logo sleep screen
+  - "Dark" (default) - The default dark BadrLabs logo sleep screen
   - "Light" - The same default sleep screen, on a white background
   - "Custom" - Custom images from the SD card; see [Sleep Screen](#37-sleep-screen) below for more information
   - "Cover" - The book cover image
@@ -223,6 +223,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
   - "Quick resume" - The text of the last page read will be displayed on the sleep screen and a moon icon is shown on the edge of the screen. Waking up the device will return to the same page of the opened book. This is useful for quickly resuming reading without waiting for the device to fully wake up and load the book.
   - "Transparent" - A transparent overlay image drawn over the current screen; see [Sleep Screen](#37-sleep-screen) below for more information
   - "Cover + Transparent" - The transparent overlay image drawn over the cover of the last opened book, falls back to "Transparent" behavior if there is no book cover
+  - "Reading Activity" - An 18-week grid of the days you read (darker is more), today's reading time, the last 7 days, when you read most, and your current book with its progress; see [Reading Activity](#371-reading-activity)
 - **Sleep Screen Cover Mode**: How to display the book cover or custom sleep image:
   
   - "Fit" (default) - Scale the image to fit centered on the screen, padding with white borders as necessary
@@ -278,7 +279,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Reader Screen Margin**: Controls the screen margins in Reading Mode between 5 and 40 pixels in 5-pixel increments.
 
-- **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Justified" (default), "Left", "Center", or "Right".
+- **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Auto (by language)" (default: right-aligned for Arabic, Hebrew and Persian books, justified otherwise), "Justified", "Left", "Center", "Right", or "Book's Style".
 
 - **Embedded Style**: Whether to use the EPUB file's embedded HTML and CSS stylisation and formatting; options are "ON" or "OFF".
 
@@ -576,14 +577,15 @@ The **Sleep Screen** setting controls what is displayed when the device goes to 
 
 | Mode               | Behavior                                                                                                                     |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Dark** (default) | The CrossPoint logo on a dark background.                                                                                    |
-| **Light**          | The CrossPoint logo on a white background.                                                                                   |
+| **Dark** (default) | The BadrLabs logo on a dark background.                                                                                      |
+| **Light**          | The BadrLabs logo on a white background.                                                                                     |
 | **Custom**         | A custom image from the SD card (see below). Falls back to **Dark** if no custom image is found.                             |
 | **Cover**          | The cover of the currently open book. Falls back to **Dark** if no book is open.                                             |
 | **Cover + Custom** | The cover of the currently open book, shown only while actively reading. Falls back to **Custom** behavior when not reading. |
 | **Transparent**    | A BMP or PNG overlay drawn over the current screen. Supports PNG and 32-bit BGRA alpha transparency, and treats white as transparent in regular BMPs. Falls back to **Dark** if no valid overlay image is found. |
 | **Cover + Transparent** | The **Transparent** overlay drawn over the cover of the last opened book, from any screen. Falls back to **Transparent** behavior if there is no book cover, and to the plain cover if no valid overlay image is found. |
 | **None**           | A blank screen.                                                                                                              |
+| **Reading Activity** | Your reading history: see [Reading Activity](#371-reading-activity). |
 
 #### Cover settings
 
@@ -621,6 +623,19 @@ Transparent overlay files are intentionally separate from normal sleep images. R
 > You can set an image as the sleep screen cover directly from the BMP image viewer in the **[Browse Files](#33-browse-files-screen)** screen. On touch devices, long-press the image.
 
 ---
+
+#### 3.7.1 Reading Activity
+
+The **Reading Activity** sleep screen shows your reading history so you can see your habit at a glance:
+
+- An 18-week grid, one square per day, one column per week (Monday on top), with today outlined. A blank square is a day you did not read; light, dark and black mean under 15 minutes, 15 to 44, and 45 or more.
+- Today's reading time and the last 7 days (days read and total time).
+- When you read most (the busiest two-hour window), once there are a few hours of data.
+- Your current book with its progress.
+
+Reading time counts only while you turn pages (a page left open counts for at most 5 minutes) and is saved when you leave the book or the device sleeps, so the screen includes the session you just finished. It needs the clock: connect to Wi-Fi once (File Transfer does this) and check the timezone under Settings > System > Clock. Until something is recorded the screen says your reading will appear there.
+
+**Settings > System > Reading Activity** opens the same data as a page: hours per week for the last 12 weeks, when you read (morning, afternoon, evening, night), average session, best day and this month's total. Press **Year** to see a whole year as two grids (January to June, July to December) with monthly totals, and **Earlier** / **Later** to move between years. Everything is kept in `/.crosspoint/reading_log.bin` on the SD card (about 2 KB a year); delete it to start over.
 
 ### 3.8 Custom Fonts (SD Card)
 
@@ -683,9 +698,11 @@ If the device sleeps or you close the book after following a link, the book reop
 
 ### Dictionary Lookup
 
-Words on the current page can be looked up in an offline StarDict dictionary stored on the SD card. Copy a dictionary to the `/dictionaries/` folder, select it in **Settings → Reader → Dictionary**, then start a lookup by choosing **Look Up** in the **[Reader Menu](#5-reader-menu)** (or by holding **Confirm**, if the **Menu long press** setting in **[Controls Settings](#363-controls)** is set to "Dictionary"). Use **Left/Right** to highlight a word and press **Confirm** to show its definition.
+Words on the current page can be looked up in an offline StarDict dictionary stored on the SD card. Copy a dictionary to the `/dictionaries/` folder, select it in **Settings → Reader → Dictionary**, then start a lookup by choosing **Look Up** in the **[Reader Menu](#5-reader-menu)** (or by holding **Confirm**, if the **Menu long press** setting in **[Controls Settings](#363-controls)** is set to "Dictionary"). Use **Left/Right** to highlight a word and press **Confirm** twice to show its definition (move between the presses to select a phrase).
 
-See [docs/dictionary.md](docs/dictionary.md) for supported formats, setup, and where to find dictionaries.
+Arabic words are found through attached particles and pronouns (بكتابه finds كتاب). A selected phrase that is not an entry is glossed word by word. With an AI key on the SD card, hold Confirm on a definition (or tap **Ask AI** in its header on touch devices) to ask AI about it.
+
+See [docs/dictionary.md](docs/dictionary.md) for supported formats, setup, Ask AI, and where to find dictionaries.
 
 ### System Navigation
 
@@ -714,9 +731,9 @@ The list menu remembers the selected entry while the book stays open. If that en
 
 Available options include:
 
+- **Look Up** – Select a word on the current page and show its dictionary definition (see [docs/dictionary.md](docs/dictionary.md)). First in the menu when a dictionary is selected in **Settings → Reader → Dictionary**; not shown otherwise.
 - **Select Chapter** – Open the table of contents to jump to a specific chapter (see [Chapter Selection](#51-chapter-selection) below).
 - **Links and Footnotes** – Select an internal link on the current page. This option appears when the page contains links.
-- **Look Up** – Select a word on the current page and show its dictionary definition (see [docs/dictionary.md](docs/dictionary.md)). Requires a dictionary to be selected in **Settings → Reader → Dictionary**.
 - **Bluetooth Page Turner** – Toggle Bluetooth for the saved remote. This entry appears after pairing a remote in **Settings → Connectivity → Bluetooth Page Turner** and disappears if that selected remote is forgotten.
 - **Create Clipping** – Select a range of text on the current page and save it as a highlighted clipping.
 - **View Clippings** – Open this book's saved clippings *(shown after the first clipping is saved)*.

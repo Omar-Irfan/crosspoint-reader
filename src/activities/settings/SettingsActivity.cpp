@@ -28,6 +28,7 @@
 #include "MappedInputManager.h"
 #include "OpdsServerListActivity.h"
 #include "OtaUpdateActivity.h"
+#include "ReadingStatsActivity.h"
 #include "SdCardFontSystem.h"
 #include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
@@ -208,6 +209,7 @@ void SettingsActivity::rebuildSettings() {
     addAction(SettingsSection::General, StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates);
     addAction(SettingsSection::General, StrId::STR_SD_FIRMWARE_UPDATE, SettingAction::SdFirmwareUpdate);
   }
+  addAction(SettingsSection::General, StrId::STR_READING_ACTIVITY, SettingAction::ReadingStats);
   addAction(SettingsSection::General, StrId::STR_ABOUT, SettingAction::About);
   rebuildRowItems();
 }
@@ -514,6 +516,13 @@ void SettingsActivity::toggleSelectedSetting() {
           startActivityForResult(std::move(activity), nullptr);
         } else {
           LOG_ERR("SETTINGS", "OOM: KeyboardLayoutsActivity");
+        }
+        break;
+      case SettingAction::ReadingStats:
+        if (auto activity = makeUniqueNoThrow<ReadingStatsActivity>(renderer, mappedInput)) {
+          startActivityForResult(std::move(activity), nullptr);
+        } else {
+          LOG_ERR("SETTINGS", "OOM: ReadingStatsActivity");
         }
         break;
       case SettingAction::About:

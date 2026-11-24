@@ -30,18 +30,18 @@ The Dictionary setting only appears when at least one usable dictionary folder e
 
 Two ways to start a lookup while reading:
 
-- Open the reader menu (**Confirm**) and choose **Look Up**.
+- Open the reader menu (**Confirm**) and choose **Look Up**, its first item.
 - Or set **Settings → Controls → Front buttons → Menu long press** to "Dictionary", then hold **Confirm** (~0.4s) on the reading page.
 
 ### Selecting Text
 
 **On button-driven devices:**
 
-1. A selection cursor appears on a word. Use **Left/Right** to navigate between words in reading order, and the side **Up/Down** buttons to jump between lines or flip across nearby pages.
+1. A selection cursor appears on a word. Use **Left/Right** to navigate between words in reading order, and the side **Up/Down** buttons to jump between lines or flip across nearby pages. Holding a button keeps moving.
 2. Press **Confirm** (**Select**) to anchor the start of the selection.
 3. **Single word:** Press **Confirm** again immediately (**Look Up**) to look up the highlighted word.
 4. **Phrase / multiple words:** Use **Left/Right** or **Up/Down** to extend the highlighted selection across words, lines, or pages. Then press **Confirm** (**Look Up**).
-5. Press **Back** at any time to cancel and return to reading.
+5. Press **Back** to drop the anchor, or to cancel and return to reading.
 
 **On touchscreen devices:**
 
@@ -54,7 +54,66 @@ On the very first lookup with a dictionary (and again whenever the `.idx` or `.s
 1. **Direct match** — the word or phrase is searched case-insensitively in the dictionary index. Leading and trailing punctuation and whitespace are stripped automatically. Hebrew niqqud and cantillation marks are removed from the search term so pointed text can match unpointed headwords. Basic Arabic vowel marks (U+064B–U+0650, U+0652) and superscript alef (U+0670) are also removed; shaddah, hamza, and maddah remain significant. Multi-word phrases match dictionary entries containing spaces (such as idioms, phrasal verbs, or compound terms). An index may list the same headword more than once (one entry per part of speech, for example); every entry it lists is shown, each labelled with its headword.
 2. **Synonyms** — on a miss, if the dictionary ships a `.syn` file, alternate spellings and irregular forms recorded there are resolved to their headword (e.g. `oxen` → `ox`, `colour` → `color`). All the headwords a synonym points at are shown. This step is skipped if the `.sidx` sidecar could not be built (e.g. transient low memory during indexing); the dictionary otherwise stays usable, and the build is retried the next time it is opened.
 3. **Stemming** — still no match: common English word forms are retried automatically: possessives and plurals (`dogs` → `dog`, `stories` → `story`) and verb endings (`walked` → `walk`, `running` → `run`, `making` → `make`).
+   For Arabic, after the word itself is checked in the `.syn`, Arabic words get Arabic fallbacks instead of English stems: shadda and tatweel removed, hamza on alef folded (أ إ آ ٱ → ا), attached particles removed (و ف ب ك ل س, ال, لل), and pronoun suffixes removed (ـه ـها ـهم ـكم ـنا ـني …), restoring the spelling a suffix changed (مدرستهم → مدرسة, كتبوه → كتبوا). Forms with the fewest changes are tried first. Every form is tried as a headword before any form is tried in the `.syn`, so `بكتابه` finds `كتاب` rather than a related word. Arabic punctuation (، ؛ ؟ ٪ ۔ ﴾ ﴿) is trimmed from the selected word like Latin punctuation.
 4. **Not found** — a short popup appears. Touchscreen devices return to reading; buttons-only devices return to word selection.
+
+## Arabic Word Breakdown
+
+On boards with PSRAM (for example X4 Pro and X4 Classic), an Arabic word's
+definition starts with a line that splits it into prefixes, stem and suffixes,
+with its root:
+
+    وَ + بِ + كِتاب + هم  (ك ت ب)
+
+When a word can be split two ways, both are shown (for example بسم). When the
+definition shown is for another form of the selected text, or for a phrase,
+the selected text is shown first. In a phrase gloss each word's root follows it.
+
+The breakdown needs `/.crosspoint/arabic_morph.txt` on the SD card. Build it
+from the Buckwalter Arabic Morphological Analyzer 1.0 data (GPL v2, (c) 2002
+QAMUS LLC and the Trustees of the University of Pennsylvania; LDC catalogue
+LDC2002L49, also bundled with GPL ports such as pyaramorph; the six files
+`dictPrefixes`, `dictSuffixes`, `dictStems`, `tableAB`, `tableAC`, `tableBC`),
+then copy the result to `/.crosspoint/arabic_morph.txt` on the SD card:
+
+    python3 scripts/build_arabic_morph.py <data folder> arabic_morph.txt
+
+The generated table is derived from that data and stays under GPL v2; it is not
+part of the firmware. From the first Arabic lookup after starting, its tables use
+about 210 KB of PSRAM for the session. Without the file, lookups work as before.
+Roots that the data files list under the wrong heading are left out rather than
+shown wrong.
+
+## Phrase Gloss
+
+When a selected phrase is not itself a dictionary entry, each word (up to 16) is looked up on its own. The definition screen lists the words in order, each followed by its dictionary form when that differs (`العابدين — عابد`) and the first lines of its definition. Lines that only name another form of a word (`plural of …`, `jussive of …`) are skipped when the entry has real meanings, and with the word breakdown the section of the entry matching the word's stem is used. With a merged dictionary, each word's lines start with the name of the source they came from (`[Wiktionary]`): the first source in the merged entry that has the word. A word with no entry is shown alone with a trailing dash. If no word is found, **Not found** appears. Glossed phrases are not saved to the vocabulary history. Selecting a phrase inside a definition glosses it the same way, and **Back** returns to the gloss.
+
+## Ask AI
+
+An optional on-demand explanation from the Claude or Gemini API, for when the dictionary entry is not enough. It is off unless the SD card holds `/.crosspoint/ai.json`:
+
+```json
+{"api_key": "sk-ant-...", "provider": "anthropic", "model": "claude-opus-5-5", "explain": "arabic"}
+```
+
+Only `api_key` is required.
+
+- `provider`: `anthropic` (default) or `gemini`. With Gemini, use a Google AI Studio key.
+- `model`: defaults to `claude-sonnet-5-5` for Anthropic and `gemini-3.8-flash` for Gemini. Any model name the provider accepts works; check the provider's current model list and prices.
+- `explain`: `arabic` (default) or `english`, the language of the first explanation.
+
+The reply shows what you selected in bold, so it is always front and centre, and under it the explanation. In Arabic that is two short lines: **المختار**, the meaning of the whole selection (a word, phrase or sentence) in this context with the root of a hard word, and **المقصود**, the point and any nuance a learner could miss. In English it is a literal-leaning **Translation** and then an **Explanation**. The model sees the selection and the sentence around it (up to about 30 words either side, within the paragraph), but only the selection is shown. It is told not to credit the author with a view the text does not show, and to say "لا أجزم" instead of guessing. Answers assume a reader who knows the religion's basics, skip i'rab, and write honorifics as ﷺ and ﷻ.
+
+With the file present, the definition screen's Confirm hint reads **Look/AI**: press Confirm to select words as usual, or **hold Confirm** to ask about the word or phrase you looked up. On touch devices you can also tap **Ask AI** at the right end of the definition's header. The reader joins Wi-Fi (showing the network list if not connected) and sends the selected text to the chosen provider's API (Anthropic or Google), together with the sentence it came from (not for words looked up from inside a definition). Nothing is sent unless you ask.
+
+The answer screen offers the other language: press Confirm, or tap **English** / **Arabic** at the right end of the header on touch devices, to ask the same question again in that language. The last answers fetched (six, or two on devices without PSRAM) are kept while the definition is open, so switching back, or asking about the same text again, shows them without a new request; they are discarded when you return to the book.
+
+Wi-Fi stays on while the definition is open, so further questions are quick. When you leave the definition the reader turns Wi-Fi off and briefly restarts into your book, as after any other Wi-Fi feature, to free the memory the connection used.
+
+- Each request is billed to the key's account; check the provider's terms for how prompts are used, especially on free tiers. Use a key with a spending limit: anyone with the SD card can read it. The web file manager never serves or replaces `ai.json`, so copy it to the card directly.
+- Both services' connections are checked against the Google Trust Services and GlobalSign root certificates, so the clock must be set. The reader syncs it over Wi-Fi when needed and shows **Clock not set** if it cannot.
+- **AI key rejected**: the API refused the key (HTTP 401/403, or Gemini's invalid-key error). **AI declined**: the model refused to answer. **No AI key**: the config file is missing or has no key. **Not Enough Memory**: too little free memory for the secure connection. **AI request failed**: Wi-Fi was cancelled or could not connect, or another network or response error.
+- After adding the file for the first time, restart the reader (or let it sleep and wake) so the **Look/AI** hint appears. Once enabled, the file is read again for each request.
 
 ## Vocabulary History
 
@@ -74,7 +133,7 @@ A readable `.ifo` file with a missing or empty `sametypesequence` enables the ty
 
 Inline entries with only empty or binary fields are skipped. If all matching entries are empty, the lookup reports no match.
 
-Definitions are drawn in your reading font. Dictionaries may use IPA symbols (e.g. `ˈ ː ɹ ɪ ʊ`…) as pronunciation guide, which built-in reader fonts do not include, so they are shown as `�`. To see them, install an [SD card font](./sd-card-fonts.md) that covers IPA and select it as the reading font.
+Definitions and Ask AI answers are drawn in your reading font, capped at 18 pt so a large book size does not make lookups unwieldy. Dictionaries may use IPA symbols (e.g. `ˈ ː ɹ ɪ ʊ`…) as pronunciation guide, which built-in reader fonts do not include, so they are shown as `�`. To see them, install an [SD card font](./sd-card-fonts.md) that covers IPA and select it as the reading font.
 
 - **Left/Right** or side **Up/Down** — previous / next page
 - **Confirm** — select words or a phrase inside the definition, then choose **Look Up**

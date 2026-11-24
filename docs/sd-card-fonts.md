@@ -201,7 +201,7 @@ To make `.cpfont` files for any device, convert your TrueType/OpenType fonts:
 | `greek` | Greek + Extended Greek |
 | `cyrillic` | Cyrillic + Supplement |
 | `hebrew` | Hebrew + Alphabetic Presentation Forms |
-| `arabic` | Arabic + Supplement + Extended-A + Presentation Forms A/B (RTL, contextual shaping) |
+| `arabic` | Arabic + Supplement + Extended-A + Presentation Forms A/B (RTL, contextual shaping), including ﷺ and ﷻ; ﷽ is left out |
 | `georgian` | Georgian + Georgian Supplement |
 | `armenian` | Armenian |
 | `ethiopic` | Ethiopic + Extended |
@@ -228,5 +228,9 @@ To list all presets with codepoint counts:
 ### Additional options
 
 `--force-autohint` — force FreeType's auto-hinter instead of the font's native hinting (useful when a font's built-in hints produce poor results at small sizes).
+
+`--reposition-marks` — place Arabic marks (harakat, shadda, tanwin, Quranic marks) at fixed heights above or below the letter. Use it for fonts such as Amiri that position marks through OpenType GPOS, which this converter does not apply; without it those marks can vanish or float on vowelled text. Fonts that already place marks in the glyph outline, such as Noto Naskh Arabic, do not need it. Known limit: over tall letters (alef, lam) the renderer raises every mark above the letter to the same height, so a shadda and a vowel on one tall letter (as in اللّٰه) can overlap.
+
+For Arabic fonts without Latin letters, add a Latin fallback (for example `--fallback-regular NotoSans-Regular.ttf`) so English text, including dictionary definitions, is not drawn blank.
 
 Install custom fonts via the web interface or manual SD card copy.

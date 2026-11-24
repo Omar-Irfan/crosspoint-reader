@@ -224,6 +224,13 @@ ClipSelectionActivity::Selection lookupReturnSelectionFor(const ClippingResult& 
 
 }  // namespace
 
+bool EpubReaderActivity::isRtlBook() const { return epub && ReaderUtils::isRtlBookLanguage(epub->getLanguage()); }
+
+// The one place the layout spec is built, so every caller resolves Auto alignment for this book.
+ReaderRenderSpec EpubReaderActivity::renderSpecFor(const uint16_t width, const uint16_t height) const {
+  return SETTINGS.readerRenderSpec(width, height, isRtlBook());
+}
+
 EpubReaderActivity::~EpubReaderActivity() {
   ImageBlock::setExtractor(nullptr, nullptr);
   // ActivityManager destroys activities with its RenderLock already held;
@@ -574,8 +581,7 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
     requestUpdate();
     return;
   }
-  const uint32_t layoutSignature =
-      readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  const uint32_t layoutSignature = readerRenderSpecSignature(renderSpecFor(buildViewportWidth, buildViewportHeight));
 
   int marginTop, marginRight, marginBottom, marginLeft;
   renderer.getOrientedViewableTRBL(&marginTop, &marginRight, &marginBottom, &marginLeft);
@@ -652,7 +658,7 @@ void EpubReaderActivity::startClipSelection(const int initialX, const int initia
       }
       auto lookup = makeUniqueNoThrow<DictionaryWordSelectActivity>(
           renderer, mappedInput, std::move(page), left + SETTINGS.screenMargin, top + SETTINGS.screenMargin,
-          clipping.text, std::move(vocabulary));
+          clipping.text, std::move(vocabulary), clipping.context);
       if (!lookup) {
         LOG_ERR("CLIP", "OOM: dictionary lookup activity");
         requestUpdate();
@@ -788,7 +794,7 @@ void EpubReaderActivity::loop() {
     if (lock.ownsLock() && section && !section->isBuilding() && section->isPartial() && buildViewportWidth > 0 &&
         !partialRebuildStartFailed && !bleturner::holdsHeap() &&
         section->currentPage + PARTIAL_REBUILD_START_MARGIN >= static_cast<int>(section->pageCount)) {
-      const ReaderRenderSpec buildSpec = SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight);
+      const ReaderRenderSpec buildSpec = renderSpecFor(buildViewportWidth, buildViewportHeight);
       if (!section->startBuild(buildSpec)) {
         partialRebuildStartFailed = true;
         LOG_ERR("ERS", "Failed to start deferred partial extension build");
@@ -1750,7 +1756,7 @@ void EpubReaderActivity::renderBook() {
   buildViewportWidth = viewportWidth;
   buildViewportHeight = viewportHeight;
 
-  const ReaderRenderSpec renderSpec = SETTINGS.readerRenderSpec(viewportWidth, viewportHeight);
+  const ReaderRenderSpec renderSpec = renderSpecFor(viewportWidth, viewportHeight);
 
   if (!section) {
     idlePrewarmOffset = 0;
@@ -2413,8 +2419,7 @@ int EpubReaderActivity::clippingAtPoint(const Page& page, const int x, const int
   int top, right, bottom, left;
   renderer.getOrientedViewableTRBL(&top, &right, &bottom, &left);
   const int fontId = SETTINGS.getReaderFontId();
-  const uint32_t signature =
-      readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  const uint32_t signature = readerRenderSpecSignature(renderSpecFor(buildViewportWidth, buildViewportHeight));
   uint16_t wordIndex = 0;
   for (const auto& element : page.elements) {
     if (element->getTag() != TAG_PageLine) continue;
@@ -2458,8 +2463,7 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
   const auto started = millis();
   size_t highlightedWords = 0;
   const uint16_t currentPage = static_cast<uint16_t>(section->currentPage);
-  const uint32_t layoutSignature =
-      readerRenderSpecSignature(SETTINGS.readerRenderSpec(buildViewportWidth, buildViewportHeight));
+  const uint32_t layoutSignature = readerRenderSpecSignature(renderSpecFor(buildViewportWidth, buildViewportHeight));
   const auto isHighlighted = [&](const uint16_t wordIndex, const TextBlock::SourceRange range) {
     // ponytail: scan at most 256 C3 / 1024 S3 clippings per word; index by chapter if this becomes slow.
     for (size_t index = 0; index < CLIPPINGS.clippingCount(); ++index) {
@@ -2581,8 +2585,8 @@ void EpubReaderActivity::renderStatusBar() const {
 namespace {
 constexpr StrId kTextRowNames[] = {StrId::STR_FONT, StrId::STR_FONT_SIZE, StrId::STR_LINE_SPACING,
                                    StrId::STR_PARA_ALIGNMENT, StrId::STR_FOCUS_READING};
-constexpr StrId kAlignIds[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER, StrId::STR_ALIGN_RIGHT,
-                               StrId::STR_BOOK_S_STYLE};
+constexpr StrId kAlignIds[] = {StrId::STR_JUSTIFY,     StrId::STR_ALIGN_LEFT,   StrId::STR_CENTER,
+                               StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE, StrId::STR_ALIGN_AUTO};
 constexpr int kTextRowCount = static_cast<int>(std::size(kTextRowNames));
 static_assert(std::size(kAlignIds) == CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT, "alignment labels");
 }  // namespace

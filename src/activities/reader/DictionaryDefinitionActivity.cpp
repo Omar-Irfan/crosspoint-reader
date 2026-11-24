@@ -7,7 +7,9 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <Memory.h>
+#include <TxtToHtml.h>
 #include <Utf8.h>
+#include <WiFi.h>
 
 #include <algorithm>
 #include <atomic>
@@ -18,10 +20,18 @@
 #include "CrossPointSettings.h"
 #include "HapticFeedback.h"
 #include "ReaderUtils.h"
+#include "SilentRestart.h"
+#include "activities/network/WifiSelectionActivity.h"
 #include "components/HeaderBackTapTarget.h"
 #include "components/UITheme.h"
+#include "network/WifiPowerSaveGuard.h"
+#include "util/AiAssist.h"
+#include "util/ArabicBreakdown.h"
 #include "util/DictHtmlPages.h"
+#include "util/DictionaryFont.h"
+#include "util/DictionaryGloss.h"
 #include "util/HtmlToPlainText.h"
+#include "util/StringUtils.h"
 
 namespace {
 
@@ -30,8 +40,11 @@ namespace {
 constexpr size_t MAX_LINE_BYTES = 191;
 constexpr float PLAIN_TEXT_LINE_SPACING = 2.0f;
 constexpr size_t HEAP_HEADROOM = 8 * 1024;
+// Ways a word may split shown on its definition (بسم: بَسَمَ, or بِ + سم).
+constexpr size_t BREAKDOWN_READINGS = 2;
 constexpr unsigned long MESSAGE_DURATION_MS = 1500;
 constexpr size_t SELECTION_PAGE_WINDOW = 3;
+constexpr unsigned long AI_HOLD_MS = 600;
 // ASCII tokens need separators; Han/Kana tokens take at least three bytes.
 constexpr size_t MAX_PLAIN_WORDS = (MAX_LINE_BYTES + 1) / 2;
 
@@ -41,6 +54,92 @@ constexpr size_t MAX_PLAIN_WORDS = (MAX_LINE_BYTES + 1) / 2;
 // reader and word-select. Bigger definitions take the span-based plain-text
 // path, which holds no per-page copies.
 constexpr size_t MAX_STYLED_HTML_BYTES = 16 * 1024;
+
+}  // namespace
+
+namespace {
+
+void appendParagraph(std::string& html, const std::string_view text) {
+  html += "<p>";
+  TxtToHtml::appendEscapedHtml(html, text);
+  html += "</p>";
+}
+
+// Puts what was selected (when the entry shown is another form of it, or a
+// phrase) and the word's breakdown above the definition. Skipped when the
+// heap cannot hold the combined text next to the current one.
+void prependLookupHeader(const char* query, const std::string& headword, const bool html, std::string& text) {
+  const std::string selected = Dictionary::cleanWord(query);
+  std::vector<std::string> lines;
+  if (StringUtils::asciiCaseCmp(selected.c_str(), headword.c_str()) != 0 || selected.find(' ') != std::string::npos) {
+    lines.push_back(selected);
+  }
+  for (const auto& reading : ArabicBreakdown::analyze(selected, BREAKDOWN_READINGS)) {
+    lines.push_back(ArabicBreakdown::line(reading));
+  }
+  if (lines.empty()) return;
+
+  std::string header;
+  for (size_t i = 0; i < lines.size(); ++i) {
+    const bool bold = i == 0 && lines[0] == selected;
+    if (html) {
+      header += bold ? "<p><b>" : "<p>";
+      TxtToHtml::appendEscapedHtml(header, lines[i]);
+      header += bold ? "</b></p>" : "</p>";
+    } else {
+      if (bold) header += DICTIONARY_PLAIN_HEADWORD_MARKER;
+      header += lines[i];
+      header += '\n';
+    }
+  }
+  if (!html) header += '\n';
+  // One exact allocation (an insert could double the string's capacity).
+  const size_t combinedBytes = header.size() + text.size();
+  const auto heap = HalMemory::getDefaultHeap();
+  if (heap.largestBlockBytes < combinedBytes + HEAP_HEADROOM) return;
+  header.reserve(combinedBytes);
+  header += text;
+  text.swap(header);
+}
+
+// The selection in bold, front and centre, and under it the answer, one
+// paragraph per line so each line takes its own direction: Arabic right,
+// English left. The surrounding sentence is only sent to the AI, not shown.
+std::string answerToHtml(const std::string& query, const std::string& answer) {
+  std::string html;
+  html.reserve(query.size() + answer.size() + 64);
+  html += "<p><b>";
+  TxtToHtml::appendEscapedHtml(html, query);
+  html += "</b></p>";
+  size_t start = 0;
+  while (start < answer.size()) {
+    size_t end = answer.find('\n', start);
+    if (end == std::string::npos) end = answer.size();
+    if (end > start) appendParagraph(html, std::string_view(answer).substr(start, end - start));
+    start = end + 1;
+  }
+  return html;
+}
+
+StrId aiErrorMessage(const AiAssist::Result result) {
+  switch (result) {
+    case AiAssist::Result::NoClock:
+      return StrId::STR_AI_NO_CLOCK;
+    case AiAssist::Result::KeyRejected:
+      return StrId::STR_AI_KEY_REJECTED;
+    case AiAssist::Result::Refused:
+      return StrId::STR_AI_REFUSED;
+    case AiAssist::Result::LowMemory:
+      return StrId::STR_DICT_LOW_MEMORY;
+    case AiAssist::Result::NotConfigured:
+      return StrId::STR_AI_NOT_CONFIGURED;
+    case AiAssist::Result::Ok:
+    case AiAssist::Result::Network:
+    case AiAssist::Result::BadResponse:
+      break;
+  }
+  return StrId::STR_AI_NETWORK_ERROR;
+}
 
 }  // namespace
 
@@ -156,6 +255,14 @@ void DictionaryDefinitionActivity::onExit() {
   if (auto* fcm = renderer.getFontCacheManager()) {
     fcm->releaseSdFontCaches();
   }
+  // Like every WiFi feature, reboot into the book once done with the network:
+  // WiFi and TLS fragment the heap the reader then needs. Deferred to here so
+  // the answer stays readable and further questions reuse the connection.
+  if (networkUsed) {
+    WiFi.disconnect(false);
+    delay(30);
+    silentRestartToReader();
+  }
 }
 
 DictionaryDefinitionActivity::BodyArea DictionaryDefinitionActivity::bodyArea() const {
@@ -257,7 +364,7 @@ bool DictionaryDefinitionActivity::wrapText(Definition& next) {
   lines.clear();
   if (!reserveLines(next, definition.size() / 32 + 8)) return false;
 
-  const int fontId = SETTINGS.getReaderFontId();
+  const int fontId = dictionaryfont::fontId(renderer);
   if (!prepareFont(definition, fontId)) return false;
 
   const BodyArea body = bodyArea();
@@ -372,6 +479,224 @@ bool DictionaryDefinitionActivity::wrapText(Definition& next) {
   return true;
 }
 
+const std::string* DictionaryDefinitionActivity::cachedAnswer(const std::string& query, const std::string& context,
+                                                              const bool arabic) const {
+  for (const auto& entry : *aiCacheRef) {
+    if (entry.arabic == arabic && entry.query == query && entry.context == context) return &entry.answer;
+  }
+  return nullptr;
+}
+
+void DictionaryDefinitionActivity::cacheAnswer(const std::string& query, const std::string& context, const bool arabic,
+                                               const std::string& answer) {
+  auto& cache = *aiCacheRef;
+  // Caching is optional: skip it rather than abort on a failed allocation.
+  const size_t bytes = sizeof(AiCacheEntry) * AI_CACHE_MAX + query.size() + context.size() + answer.size();
+  const auto heap = HalMemory::getDefaultHeap();
+  if (heap.freeBytes < bytes + HEAP_HEADROOM || heap.largestBlockBytes < answer.size() + 1) return;
+  if (cache.size() >= AI_CACHE_MAX) cache.erase(cache.begin());  // oldest first
+  cache.push_back({query, context, arabic, answer});
+}
+
+void DictionaryDefinitionActivity::openAnswer(const std::string& answer, std::string context, const bool arabic) {
+  auto activity = makeUniqueNoThrow<DictionaryDefinitionActivity>(renderer, mappedInput, lookup->query,
+                                                                  answerToHtml(lookup->query, answer), true);
+  if (!activity) {
+    showMessage(StrId::STR_DICT_LOW_MEMORY);
+    return;
+  }
+  activity->enableAiAnswer(std::move(context), arabic, aiCacheRef);
+  messageVisible = false;
+  startActivityForResult(std::move(activity), [this](const ActivityResult&) { requestUpdate(); });
+}
+
+void DictionaryDefinitionActivity::askAi() {
+  const bool arabic = AiAssist::defaultExplain() == AiAssist::Explain::Arabic;
+  std::string context = lookup->depth == 0 ? aiContext : std::string{};
+  // A cached answer needs no network at all.
+  if (const std::string* hit = cachedAnswer(lookup->query, context, arabic)) {
+    openAnswer(*hit, std::move(context), arabic);
+    return;
+  }
+  networkUsed = true;
+  if (WiFi.status() == WL_CONNECTED) {
+    runAi(std::move(context), arabic);
+    return;
+  }
+  auto wifi = makeUniqueNoThrow<WifiSelectionActivity>(renderer, mappedInput);
+  if (!wifi) {
+    showMessage(StrId::STR_DICT_LOW_MEMORY);
+    return;
+  }
+  startActivityForResult(std::move(wifi),
+                         [this, context = std::move(context), arabic](const ActivityResult& result) mutable {
+                           if (result.isCancelled || WiFi.status() != WL_CONNECTED) {
+                             WiFi.disconnect(false);
+                             WiFi.mode(WIFI_OFF);
+                             showMessage(StrId::STR_AI_NETWORK_ERROR);
+                             return;
+                           }
+                           runAi(std::move(context), arabic);
+                         });
+}
+
+void DictionaryDefinitionActivity::runAi(std::string context, const bool arabic) {
+  std::string answer;
+  if (fetchAnswer(lookup->query, context, arabic, answer)) openAnswer(answer, std::move(context), arabic);
+}
+
+// Asks over the open WiFi connection, showing progress or the error; caches the answer.
+bool DictionaryDefinitionActivity::fetchAnswer(const std::string& query, const std::string& context, const bool arabic,
+                                               std::string& answer) {
+  {
+    RenderLock lock;
+    showMessage(StrId::STR_AI_ASKING);
+  }
+  requestUpdateAndWait();
+  // Give TLS the heap the definition's fonts were using; the next render reloads them.
+  if (auto* fcm = renderer.getFontCacheManager()) fcm->releaseSdFontCaches();
+  const auto explain = arabic ? AiAssist::Explain::Arabic : AiAssist::Explain::English;
+  AiAssist::Result result;
+  {
+    WifiPowerSaveGuard powerSave;  // modem sleep stalls TLS traffic for seconds
+    result = AiAssist::ask(query, context, explain, answer);
+    if (result == AiAssist::Result::LowMemory && !aiCacheRef->empty()) {
+      std::vector<AiCacheEntry>{}.swap(*aiCacheRef);  // the cache is the one thing here to give back
+      result = AiAssist::ask(query, context, explain, answer);
+    }
+  }
+  if (result != AiAssist::Result::Ok) {
+    showMessage(aiErrorMessage(result));
+    return false;
+  }
+  cacheAnswer(query, context, arabic, answer);
+  return true;
+}
+
+bool DictionaryDefinitionActivity::showAnswerInPlace(const std::string& answer, const bool arabic) {
+  RenderLock lock;
+  messageVisible = false;
+  content.releasePayload();
+  content.text = answerToHtml(content.headword, answer);
+  content.currentPage = 0;
+  if (!prepareDefinition(content)) {
+    showMessage(StrId::STR_DICT_LOW_MEMORY);
+    return false;
+  }
+  aiAnswerArabic = arabic;
+  requestUpdate();
+  return true;
+}
+
+// Shows the answer's question in the other language: from the cache when it
+// was fetched before, otherwise asked again over the WiFi the parent keeps up.
+void DictionaryDefinitionActivity::switchAnswerLanguage() {
+  const bool toArabic = !aiAnswerArabic;
+  if (const std::string* hit = cachedAnswer(content.headword, aiContext, toArabic)) {
+    showAnswerInPlace(*hit, toArabic);
+    return;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    showMessage(StrId::STR_AI_NETWORK_ERROR);
+    return;
+  }
+  std::string answer;
+  if (fetchAnswer(content.headword, aiContext, toArabic, answer)) showAnswerInPlace(answer, toArabic);
+}
+
+// A phrase that is not an entry is glossed word by word. Only one definition
+// is held at a time (each is reduced to a short snippet before the next
+// lookup), so the peak is one lookup plus the gloss text: at most MAX_WORDS
+// snippets of MAX_SNIPPET_BYTES.
+bool DictionaryDefinitionActivity::buildGloss(Dictionary& dictionary, const std::string& phrase, const bool html,
+                                              std::string& out, Dictionary::LookupResult& result) {
+  std::vector<std::string> words;
+  DictionaryGloss::splitWords(phrase, words);
+  if (words.size() < 2) return false;
+  out.clear();
+  const size_t reserveBytes = words.size() * (DictionaryGloss::MAX_SNIPPET_BYTES + 64);
+  const auto heap = HalMemory::getDefaultHeap();
+  if (heap.freeBytes < reserveBytes + HEAP_HEADROOM || heap.largestBlockBytes < reserveBytes) {
+    result = Dictionary::LookupResult::LowMemory;
+    return false;
+  }
+  out.reserve(reserveBytes);
+  // A heading per word, then its snippet: bold paragraphs in HTML, marker lines in plain text.
+  const auto openHeading = [&] { out += html ? "<p><b>" : std::string(1, DICTIONARY_PLAIN_HEADWORD_MARKER); };
+  const auto closeHeading = [&] { out += html ? "</b></p>" : "\n"; };
+  const auto append = [&](const std::string_view text) {
+    if (html) {
+      TxtToHtml::appendEscapedHtml(out, text);
+    } else {
+      out += text;
+    }
+  };
+  int glossed = 0;
+  for (const auto& word : words) {
+    std::string definition;
+    std::string headword;
+    auto wordResult = Dictionary::LookupResult::NotFound;
+    const std::string cleaned = Dictionary::cleanWord(word.c_str());
+    openHeading();
+    append(cleaned);
+    if (!dictionary.lookup(word.c_str(), definition, headword, &wordResult)) {
+      if (wordResult == Dictionary::LookupResult::LowMemory) {
+        result = wordResult;  // report low memory, not "Not found"
+        out.clear();
+        return false;
+      }
+      append(" \xE2\x80\x94");  // em dash: in every reader font, unlike an arrow
+      closeHeading();
+      continue;
+    }
+    ++glossed;
+    if (headword != cleaned) {
+      append(" \xE2\x80\x94 ");
+      append(headword);
+    }
+    const auto readings = ArabicBreakdown::analyze(cleaned, 1);
+    const std::string stem = readings.empty() ? std::string{} : readings.front().stem;
+    if (!readings.empty()) append(ArabicBreakdown::rootSuffix(readings.front()));
+    closeHeading();
+    const std::string plain = dictionary.definitionsAreHtml()
+                                  ? htmlToPlainText(std::move(definition), DICTIONARY_PLAIN_HEADWORD_MARKER)
+                                  : std::move(definition);
+    std::string source;
+    const std::string snippet = DictionaryGloss::snippet(plain, DICTIONARY_PLAIN_HEADWORD_MARKER, &source, stem);
+    if (snippet.empty()) continue;
+    if (html) out += "<p>";
+    if (!source.empty()) {  // which dictionary of a merged set the meaning came from
+      append("[");
+      append(source);
+      append("] ");
+    }
+    append(snippet);
+    out += html ? "</p>" : "\n";
+  }
+  if (glossed == 0) {
+    out.clear();
+    result = Dictionary::LookupResult::NotFound;
+    return false;
+  }
+  result = Dictionary::LookupResult::Found;
+  return true;
+}
+
+bool DictionaryDefinitionActivity::lookupOrGloss(Dictionary& dictionary, const char* word, const bool html,
+                                                 std::string& text, std::string& headword,
+                                                 Dictionary::LookupResult& result, bool* glossed) {
+  if (glossed) *glossed = false;
+  if (dictionary.lookup(word, text, headword, &result)) {
+    prependLookupHeader(word, headword, html, text);
+    return true;
+  }
+  if (result != Dictionary::LookupResult::NotFound || !buildGloss(dictionary, word, html, text, result)) return false;
+  headword = word;
+  prependLookupHeader(word, headword, html, text);
+  if (glossed) *glossed = true;
+  return true;
+}
+
 void DictionaryDefinitionActivity::showMessage(const StrId nextMessage) {
   message = nextMessage;
   messageTime = millis();
@@ -382,7 +707,8 @@ void DictionaryDefinitionActivity::showMessage(const StrId nextMessage) {
 bool DictionaryDefinitionActivity::restoreCurrentDefinition(const bool styled) {
   const int page = content.currentPage;
   auto result = Dictionary::LookupResult::Found;
-  if (!lookup->dictionary.lookup(lookup->query.c_str(), content.text, content.headword, &result) ||
+  if (!lookupOrGloss(lookup->dictionary, lookup->query.c_str(), htmlDefinition, content.text, content.headword,
+                     result) ||
       !prepareDefinition(content, !styled) || styled != !content.pages.empty() || page >= content.totalPages) {
     LOG_ERR("DICT", "Cannot recover current definition after failed lookup");
     finish();
@@ -413,7 +739,7 @@ void DictionaryDefinitionActivity::navigateDefinition(const bool back) {
   Definition next;
   auto result = Dictionary::LookupResult::Found;
   const char* word = back ? lookup->history[lookup->depth - 1].query.c_str() : lookup->pendingWord.c_str();
-  const bool found = lookup->dictionary.lookup(word, next.text, next.headword, &result);
+  const bool found = lookupOrGloss(lookup->dictionary, word, htmlDefinition, next.text, next.headword, result);
   const auto recover = [this, back, styled, &next](const StrId error) {
     lookup->pendingWord.clear();
     next.releasePayload();
@@ -477,7 +803,7 @@ void DictionaryDefinitionActivity::navigateDefinition(const bool back) {
 
 bool DictionaryDefinitionActivity::buildPlainSelectionPages() {
   // Only the selection window gets packed word arenas; the definition keeps its cheap line spans.
-  const int fontId = SETTINGS.getReaderFontId();
+  const int fontId = dictionaryfont::fontId(renderer);
   const int lineHeight = renderer.getLineHeight(fontId, PLAIN_TEXT_LINE_SPACING);
   const int pageCount = std::min<int>(SELECTION_PAGE_WINDOW, content.totalPages - content.selectionPage);
   const size_t scratchBytes =
@@ -631,6 +957,30 @@ void DictionaryDefinitionActivity::loop() {
     startSelection();
     return;
   }
+  if (aiMode == AiMode::Answer && mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    switchAnswerLanguage();
+    return;
+  }
+  if (aiTapAvailable()) {
+    int tx = 0;
+    int ty = 0;
+    const Rect r = aiTapRect;
+    if (r.width > 0 && mappedInput.wasScreenTapped(tx, ty) && tx >= r.x && tx < r.x + r.width && ty >= r.y &&
+        ty < r.y + r.height) {
+      if (aiMode == AiMode::Answer) {
+        switchAnswerLanguage();
+      } else {
+        askAi();
+      }
+      return;
+    }
+  }
+  // Holding Confirm asks AI. The long press fires while held and consumes its release,
+  // so a hold never also starts a selection.
+  if (lookup && aiMode == AiMode::Ask && mappedInput.wasLongPressed(MappedInputManager::Button::Confirm, AI_HOLD_MS)) {
+    askAi();
+    return;
+  }
 
   // Page navigation must keep polling input while the render task refreshes the display.
   auto currentPage = std::atomic_ref(content.currentPage);
@@ -715,8 +1065,16 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
   const int contentWidth = renderer.getScreenWidth() - hintGutterWidth;
   const int contentY = isInverted ? metrics.buttonHintsHeight : 0;
 
-  char counter[16] = {};
-  if (totalPages > 1) {
+  char counter[32] = {};
+  // Touch boards have no Confirm button: the header's right end is a tap
+  // target for Ask AI, labelled ahead of the page counter.
+  const char* answerToggle = aiAnswerArabic ? tr(STR_AI_IN_ENGLISH) : tr(STR_AI_IN_ARABIC);
+  if (aiTapAvailable()) {
+    snprintf(counter, sizeof(counter), totalPages > 1 ? "%s  %d/%d" : "%s",
+             aiMode == AiMode::Answer ? answerToggle : tr(STR_ASK_AI_TAP), currentPage + 1, totalPages);
+    aiTapRect =
+        Rect{contentX + contentWidth * 2 / 3, contentY + metrics.topPadding, contentWidth / 3, metrics.headerHeight};
+  } else if (totalPages > 1) {
     snprintf(counter, sizeof(counter), "%d/%d", currentPage + 1, totalPages);
   }
   GUI.drawHeader(renderer, Rect{contentX, contentY + metrics.topPadding, contentWidth, metrics.headerHeight},
@@ -725,7 +1083,7 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
   // Body: two-pass draw inside a prewarm scope (same pattern as the reader's
   // renderContents) so SD-card font glyphs load from SD in one batch instead
   // of one on-demand overflow read per character on every page turn.
-  const int fontId = SETTINGS.getReaderFontId();
+  const int fontId = dictionaryfont::fontId(renderer);
   const BodyArea body = bodyArea();
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();
@@ -733,7 +1091,11 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
   scope.endScanAndPrewarm();
   drawBody(fontId, body.x, body.y, currentPage);
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), lookup ? tr(STR_LOOKUP) : "", (currentPage > 0 ? "<" : ""),
+  const char* confirmLabel = aiMode == AiMode::Answer ? answerToggle
+                             : !lookup                ? ""
+                             : aiMode == AiMode::Ask  ? tr(STR_LOOKUP_OR_AI)
+                                                      : tr(STR_LOOKUP);
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, (currentPage > 0 ? "<" : ""),
                                             (currentPage + 1 < totalPages ? ">" : ""));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   if (messageVisible) {

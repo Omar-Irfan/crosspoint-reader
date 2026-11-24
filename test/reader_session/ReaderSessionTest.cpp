@@ -119,4 +119,47 @@ TEST(ReaderSession, MonotonicElapsedHandlesMillisWrap) {
   EXPECT_EQ(session.durationSeconds(), 5u);
 }
 
+TEST(ReaderSession, TracksReadingTimeWithAFiveMinuteCapPerPage) {
+  ReaderSession session;
+  anchor(session, 1000, 100, 1000);
+  turnAndRender(session, true, true, 11000, 110, 1100);     // 10 s
+  turnAndRender(session, true, true, 3611000, 3710, 1200);  // an hour away: capped
+
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(3611000, epoch), 310u);
+  EXPECT_EQ(epoch, 3710);
+  EXPECT_EQ(session.takeTrackedSeconds(3611000, epoch), 0u);  // taking clears it
+}
+
+TEST(ReaderSession, TrackedTimeIgnoresBackwardTurnsAndResets) {
+  ReaderSession session;
+  anchor(session, 1000, 100, 1000);
+  turnAndRender(session, false, true, 11000, 110, 900);
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(11000, epoch), 0u);
+
+  turnAndRender(session, true, true, 21000, 120, 1000);
+  session.reset();
+  EXPECT_EQ(session.takeTrackedSeconds(21000, epoch), 0u);
+}
+
+TEST(ReaderSession, TakeCountsThePageBeingReadOnceAndCapsIt) {
+  ReaderSession session;
+  anchor(session, 1000, 100, 1000);
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(61000, epoch), 60u);  // a minute on the last page
+  EXPECT_EQ(session.takeTrackedSeconds(61500, epoch), 0u);   // a second flush adds nothing
+
+  anchor(session, 70000, 170, 1100);
+  EXPECT_EQ(session.takeTrackedSeconds(70000 + 3600000, epoch), 300u);  // walked away: capped
+}
+
+TEST(ReaderSession, TakeIgnoresAnUntrustedClock) {
+  ReaderSession session;
+  anchor(session, 1000, 0, 1000);
+  int64_t epoch = 1;
+  EXPECT_EQ(session.takeTrackedSeconds(61000, epoch), 0u);
+  EXPECT_EQ(epoch, 0);
+}
+
 }  // namespace

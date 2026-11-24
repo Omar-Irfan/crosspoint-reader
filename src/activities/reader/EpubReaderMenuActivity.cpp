@@ -65,6 +65,10 @@ void EpubReaderMenuActivity::buildMenuItems(std::vector<MenuItem>& items, const 
                                             const bool hasBookmarks, const bool hasClippings) {
   items.clear();
   items.reserve(MAX_MENU_ITEMS);
+  // Look Up first: it is the most used item when reading with a dictionary.
+  if (SETTINGS.dictionaryName[0] != '\0') {
+    items.push_back({MenuAction::DICTIONARY, StrId::STR_LOOKUP});
+  }
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   if (hasFootnotes) {
     items.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
@@ -85,9 +89,6 @@ void EpubReaderMenuActivity::buildMenuItems(std::vector<MenuItem>& items, const 
   }
   if (bleturner::status().compiledIn && SETTINGS.ble.peerAddr[0] != '\0') {
     items.push_back({MenuAction::BLUETOOTH, StrId::STR_BT_PAGE_TURNER});
-  }
-  if (SETTINGS.dictionaryName[0] != '\0') {
-    items.push_back({MenuAction::DICTIONARY, StrId::STR_LOOKUP});
   }
   items.push_back({MenuAction::ROTATE_SCREEN, StrId::STR_ORIENTATION});
   items.push_back({MenuAction::AUTO_PAGE_TURN, StrId::STR_AUTO_TURN_PAGES_PER_MIN});

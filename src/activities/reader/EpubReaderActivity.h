@@ -22,6 +22,8 @@
 
 class EpubReaderActivity final : public ReaderActivity {
   std::shared_ptr<Epub> epub;
+  bool isRtlBook() const;
+  ReaderRenderSpec renderSpecFor(uint16_t width, uint16_t height) const;
   std::unique_ptr<Epub::SyncMetadata> vocabularyMetadata;
   std::unique_ptr<Section> section = nullptr;
   int currentSpineIndex = 0;

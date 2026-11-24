@@ -29,6 +29,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     QUICK_RESUME = 6,
     TRANSPARENT_CUSTOM = 7,
     COVER_TRANSPARENT = 8,
+    READING_ACTIVITY = 9,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
@@ -138,6 +139,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     CENTER_ALIGN = 2,
     RIGHT_ALIGN = 3,
     BOOK_STYLE = 4,
+    AUTO_ALIGN = 5,  // Right for RTL books, Justify otherwise
     PARAGRAPH_ALIGNMENT_COUNT
   };
 
@@ -328,7 +330,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // available size (and persists the snap) whenever the family changes.
   uint8_t fontPointSize = DEFAULT_FONT_POINT_SIZE;
   uint8_t lineSpacing = LINE_SPACING_120;
-  uint8_t paragraphAlignment = JUSTIFIED;
+  uint8_t paragraphAlignment = AUTO_ALIGN;
   // Auto-sleep timeout setting (default 10 minutes). Legacy sleepTimeout enum values are migration-only.
   uint8_t sleepTimeoutMinutes = 10;
   // E-ink refresh frequency (default 15 pages)
@@ -354,7 +356,13 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t longPressButtonBehavior = OFF;
   // Long-press Confirm function in EPUB reader (cycles through LONG_PRESS_MENU_FUNCTION values).
   // Defaults to Disabled so shortcut-based bookmark toggling remains opt-in.
-  uint8_t longPressMenuFunction = LP_MENU_DISABLED;
+#ifdef CROSSPOINT_ARABIC_FIRST
+  // Arabic-first build: holding Confirm while reading opens the dictionary.
+  static constexpr uint8_t DEFAULT_LONG_PRESS_MENU = LP_MENU_DICTIONARY;
+#else
+  static constexpr uint8_t DEFAULT_LONG_PRESS_MENU = LP_MENU_DISABLED;
+#endif
+  uint8_t longPressMenuFunction = DEFAULT_LONG_PRESS_MENU;
   // UI Theme
   uint8_t uiTheme = LYRA;
   // Sunlight fading compensation
@@ -511,7 +519,11 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // viewport is renderer/orientation-derived, so the caller supplies it —
   // passing it in keeps a spec from ever existing in a half-filled state.
   // Unlocked for the same reason as statusBarSpec(); see the note above.
-  ReaderRenderSpec readerRenderSpec(uint16_t viewportWidth, uint16_t viewportHeight) const;
+  ReaderRenderSpec readerRenderSpec(uint16_t viewportWidth, uint16_t viewportHeight, bool rtlBook) const;
+  // The alignment to lay out with; resolves AUTO_ALIGN for the book direction.
+  uint8_t effectiveAlignment(bool rtlBook) const {
+    return paragraphAlignment == AUTO_ALIGN ? (rtlBook ? RIGHT_ALIGN : JUSTIFIED) : paragraphAlignment;
+  }
 
   static const char* getFilePath() { return "/.crosspoint/settings.json"; }
   void toJson(JsonDocument& doc) const;

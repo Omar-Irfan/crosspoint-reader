@@ -75,27 +75,33 @@ int main() {
   // Hold repeats are captured during refresh, then stop upon release.
   RenderLock::busy = true;
   poll(1000, Input::INPUT_RIGHT, Input::INPUT_RIGHT);
-  poll(1499, 0, Input::INPUT_RIGHT);
+  poll(1399, 0, Input::INPUT_RIGHT);
   assert(activity.pendingButtonCount == 1);
-  poll(1500, 0, Input::INPUT_RIGHT);
-  poll(2000, 0, Input::INPUT_RIGHT);
-  poll(2010, 0, 0);
+  poll(1400, 0, Input::INPUT_RIGHT);   // first repeat after the delay
+  poll(1549, 0, Input::INPUT_RIGHT);
+  assert(activity.pendingButtonCount == 2);
+  poll(1550, 0, Input::INPUT_RIGHT);   // then at the faster rate
+  poll(1560, 0, 0);
   RenderLock::busy = false;
   poll(3000, 0, 0);
   assert(activity.selected == 9 && activity.pendingButtonCount == 0);
   // A new press resets the repeat delay; unsigned elapsed time survives wrap.
   poll(UINT32_MAX - 100, Input::INPUT_LEFT, Input::INPUT_LEFT);
-  poll(398, 0, Input::INPUT_LEFT);
+  poll(298, 0, Input::INPUT_LEFT);
   assert(activity.selected == 8);
-  poll(399, 0, Input::INPUT_LEFT);
+  poll(299, 0, Input::INPUT_LEFT);
   assert(activity.selected == 7);
   poll(410, 0, 0);
+  // Up and Down repeat too.
+  poll(420, 0, Input::INPUT_DOWN);
+  poll(820, 0, Input::INPUT_DOWN);
+  poll(830, 0, 0);
   // Overflow preserves the queued prefix and reports failure instead of overwriting it.
   RenderLock::busy = true;
-  for (int i = 0; i < 17; ++i) poll(500 + i, Input::INPUT_RIGHT, 0);
+  for (int i = 0; i < 17; ++i) poll(900 + i, Input::INPUT_RIGHT, 0);
   assert(activity.pendingButtonCount == 16 && overflows == 1);
   RenderLock::busy = false;
-  poll(600, 0, 0);
+  poll(1000, 0, 0);
   assert(activity.selected == 23 && activity.pendingButtonCount == 0);
 }
 """

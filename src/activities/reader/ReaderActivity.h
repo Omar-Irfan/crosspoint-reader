@@ -69,6 +69,7 @@ class ReaderActivity : public Activity {
   void clearEndOfBookOptionsIfNeeded();
   void disableFastInitialRefresh();
   void notePageTurn(bool forward, bool succeeded);
+  void recordReadingTime();
   void flushReaderSession();
 
  public:
