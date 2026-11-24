@@ -34,7 +34,8 @@ void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, in
 
   BlockStyle style;
   style.alignment = toCssAlign(SETTINGS.effectiveAlignment(false));
-  style.textAlignDefined = true;  // honor the user's choice; RTL auto-detected from text
+  // Honor the user's choice; RTL is auto-detected from the text, and Left means start-aligned.
+  style.textAlignDefined = BlockStyle::userAlignmentIsExplicit(style.alignment);
 
   ParsedText parsed(SETTINGS.hyphenationEnabled != 0, SETTINGS.focusReadingEnabled != 0, style,
                     SETTINGS.paragraphIndentSpaces);

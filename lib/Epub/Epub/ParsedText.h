@@ -166,6 +166,7 @@ class ParsedText {
   void resetFirstLineIndent() { firstLineConsumed = paragraphStartEmitted = false; }
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   void setHyphenationEnabled(const bool enabled) { hyphenationEnabled = enabled; }
+  void setParagraphIndentSpaces(const uint8_t spaces) { paragraphIndentSpaces = spaces; }
   bool isHyphenationEnabled() const { return hyphenationEnabled; }
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }

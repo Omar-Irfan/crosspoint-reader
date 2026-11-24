@@ -90,6 +90,15 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
+### Version 76
+
+Version 76 keeps the binary layout and rebuilds completed and partial sections.
+A Left alignment from the reader setting (including Auto in a left-to-right
+book) is now start-aligned: `textAlignDefined` is stored false for those blocks,
+so right-to-left paragraphs are laid out on the right. The reader's paragraph
+indent is no longer applied to text inside h1-h6 or list items. Book metadata
+and saved progress are kept.
+
 ### Version 74
 
 Version 74 keeps the binary layout and rebuilds completed and partial sections.

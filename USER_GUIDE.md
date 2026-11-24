@@ -279,7 +279,9 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 - **Reader Screen Margin**: Controls the screen margins in Reading Mode between 5 and 40 pixels in 5-pixel increments.
 
-- **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Auto (by language)" (default: right-aligned for Arabic, Hebrew and Persian books, justified otherwise), "Justified", "Left", "Center", "Right", or "Book's Style".
+- **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Auto (by language)" (default: right-aligned for Arabic, Hebrew and Persian books, left-aligned otherwise), "Justified", "Left", "Center", "Right", or "Book's Style". "Left" (and Auto in a left-to-right book) aligns each paragraph to where its text starts, so Arabic, Hebrew and Persian paragraphs are right-aligned, including Arabic quotations in an English book.
+
+- **Paragraph Indentation**: First-line indent for body paragraphs, from 0 to 5 spaces. Headings and list items are not indented.
 
 - **Embedded Style**: Whether to use the EPUB file's embedded HTML and CSS stylisation and formatting; options are "ON" or "OFF".
 

@@ -30,9 +30,12 @@ struct BlockStyle {
   int16_t paddingRight = 0;   // treated same as margin for rendering
   int16_t textIndent = 0;
   bool textIndentDefined = false;  // true if text-indent was explicitly set in CSS
-  bool textAlignDefined = false;   // true if text-align was explicitly set in CSS
-  bool isRtl = false;              // true if resolved direction is RTL
-  bool directionDefined = false;   // true if direction was explicitly set in CSS/HTML
+  // True if the alignment is absolute. False means start-aligned: ParsedText lays an RTL
+  // paragraph with Left out on the right. Not simply "CSS set text-align": a Left from the
+  // reader setting stays false even when CSS sets text-align (see userAlignmentIsExplicit).
+  bool textAlignDefined = false;
+  bool isRtl = false;             // true if resolved direction is RTL
+  bool directionDefined = false;  // true if direction was explicitly set in CSS/HTML
 
   // Computed CSS font size relative to the reader's body size. Layout-time only.
   float fontScale = 1.0f;
@@ -125,6 +128,11 @@ struct BlockStyle {
   // Create a BlockStyle from CSS style properties, resolving CssLength values to pixels
   // emSize is the current font line height, used for em/rem unit conversion
   // paragraphAlignment is the user's paragraphAlignment setting preference
+  // The reader's alignment setting overrides the book's text-align. A Left that comes from
+  // the setting means "start-aligned", so RTL paragraphs (an Arabic quotation in an English
+  // book) still go to the right.
+  static bool userAlignmentIsExplicit(const CssTextAlign userAlignment) { return userAlignment != CssTextAlign::Left; }
+
   static BlockStyle fromCssStyle(const CssStyle& cssStyle, const float emSize, const CssTextAlign paragraphAlignment,
                                  const uint16_t viewportWidth = 0) {
     BlockStyle blockStyle;
@@ -153,6 +161,7 @@ struct BlockStyle {
       blockStyle.alignment = blockStyle.textAlignDefined ? cssStyle.textAlign : CssTextAlign::Justify;
     } else {
       blockStyle.alignment = paragraphAlignment;
+      blockStyle.textAlignDefined = blockStyle.textAlignDefined && userAlignmentIsExplicit(paragraphAlignment);
     }
     blockStyle.pageBreakBefore = cssStyle.hasPageBreakBefore() && cssStyle.pageBreakBefore;
     blockStyle.pageBreakAfter = cssStyle.hasPageBreakAfter() && cssStyle.pageBreakAfter;
