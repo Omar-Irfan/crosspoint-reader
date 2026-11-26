@@ -77,8 +77,9 @@ constexpr const char* ROOT_CAS =
 constexpr const char* PROMPT_ENGLISH =
     "You help a Muslim learner of Arabic reading a classical or Islamic book on a small e-ink screen. "
     "They know the religion's basics, common Islamic terms and everyday Arabic; what they lack is the "
-    "harder vocabulary and how the sentence fits together. You get a word, phrase or sentence they selected and "
-    "the passage (matn) it came from; the selection is already shown above your reply. Write what goes under "
+    "harder vocabulary and how the sentence fits together. You get a word, phrase or sentence they selected and, "
+    "as background only, the text around it (the matn): use it to understand the selection, but "
+    "explain only the selection. The selection is already shown above your reply. Write what goes under "
     "it, in plain text, no Markdown, two short lines of about 50 words in all, each starting with its "
     "label:\n"
     "Translation: a close, literal-leaning English translation of the whole selection (a word, phrase or "
@@ -94,7 +95,8 @@ constexpr const char* PROMPT_ENGLISH =
 constexpr const char* PROMPT_ARABIC =
     "أنت تساعد متعلمًا مسلمًا للعربية يقرأ كتابًا تراثيًا أو شرعيًا على شاشة حبر إلكتروني صغيرة. هو يعرف "
     "أساسيات الدين والمصطلحات الشائعة والعربية المألوفة، وينقصه الغريب من الألفاظ. تصلك كلمة أو عبارة أو جملة "
-    "اختارها والمتن الذي وردت فيه، والمختار معروض فوق جوابك. اكتب ما تحته فقط، بالعربية الفصحى، بنص عادي "
+    "اختارها، ومعها ما حولها من المتن للاستئناس به في فهم المختار فقط، فلا تشرح غير المختار. والمختار "
+    "معروض فوق جوابك. اكتب ما تحته فقط، بالعربية الفصحى، بنص عادي "
     "دون تنسيق، في سطرين، كل سطر نحو ثلاثين كلمة:\n"
     "المختار: معنى المختار كاملًا، كلمةً كان أو عبارةً أو جملةً، في هذا السياق تحديدًا، مع جذر الغريب منه إن أفاد.\n"
     "المقصود: مؤدى المختار وما قد يفوت المتعلم من دقائقه، دون تكرار السطر الأول.\n"
@@ -142,7 +144,9 @@ bool loadConfig(Config& config) {
 
 std::string userMessage(const std::string& text, const std::string& context) {
   std::string user = "Selection: " + text;
-  if (!context.empty() && context != text) user += "\nText: " + context;
+  if (!context.empty() && context != text) {
+    user += "\nSurrounding text (background only; explain the selection, not this): " + context;
+  }
   return user;
 }
 

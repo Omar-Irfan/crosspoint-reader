@@ -4,9 +4,9 @@
 #include <string>
 
 // Optional "Ask AI" help for dictionary lookups: sends the selected word or
-// phrase and its sentence (the matn) to the Claude or Gemini API and returns
-// the short explanation that goes under the matn. Off unless
-// /.crosspoint/ai.json holds an API key:
+// phrase and, as labelled background, the text around it (the matn) to the
+// Claude or Gemini API and returns the short explanation that goes under the
+// selection. Off unless /.crosspoint/ai.json holds an API key:
 //   {"api_key": "...", "provider": "anthropic"|"gemini", "model": "...", "explain": "arabic"|"english"}
 // Only api_key is required.
 namespace AiAssist {

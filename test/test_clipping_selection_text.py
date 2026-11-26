@@ -22,6 +22,11 @@ memory_guard = "  const auto heap = HalMemory::getDefaultHeap();" + confirm_sour
     "  const auto heap = HalMemory::getDefaultHeap();", 1
 )[1].split("  if (lowMemory ||", 1)[0]
 
+# endsSentence, the context limits and buildContext (Ask AI background text).
+context_source = "namespace {\n\n// True when a word ends a sentence" + source.split(
+    "namespace {\n\n// True when a word ends a sentence", 1
+)[1].split("void ClipSelectionActivity::cancel()", 1)[0]
+
 def method(name, next_name, text=source):
     signature = text.index(name)
     start = text.rfind("\n", 0, signature) + 1
@@ -312,6 +317,7 @@ struct ClipSelectionActivity {
   int lastRenderedPageOffset = 0, lastRenderedSelected = 0, lastRenderedRangeStart = -1;
   int lastRenderedTextOffset = 0, lastRenderedTextXOffset = 0;
   bool buildSelectedText(int first, int last, std::string& text) const;
+  void buildContext(int first, int last, std::string& out) const;
   bool extractWords();
   void drawSelection() const;
   bool renderIncremental();
@@ -322,7 +328,7 @@ struct ClipSelectionActivity {
   Rect handleRect(int, bool) const { return {}; }
   Rect actionRect() const { return {}; }
 };
-""" + build_text + extract_words + gap_draw + incremental_draw + selection_draw + r"""
+""" + build_text + context_source + extract_words + gap_draw + incremental_draw + selection_draw + r"""
 struct EpubReaderActivity {
   Renderer& renderer;
   explicit EpubReaderActivity(Renderer& renderer) : renderer(renderer) {}
@@ -637,6 +643,48 @@ int main() {
     expected += "word";
   }
   expect(activity, 0, 239, expected.c_str());
+
+  // Ask AI context: the selection's sentence plus one sentence each side,
+  // where a paragraph start also starts a sentence.
+  const char* sentences[] = {"Zero.", "One", "two.", "Three", "four", "five.", "Six", "seven.", "Eight."};
+  activity.wordCount = std::size(sentences);
+  for (size_t i = 0; i < activity.wordCount; ++i) {
+    activity.words[i] = {};
+    activity.words[i].text = sentences[i];
+    activity.words[i].startOffset = i * 10;
+    activity.words[i].endOffset = i * 10 + 6;
+  }
+  HalMemory::stats = {1024 * 1024, 1024 * 1024};
+  auto context = [&](int first, int last, const char* expectedContext) {
+    std::string out;
+    activity.buildContext(first, last, out);
+    if (out != expectedContext) std::fprintf(stderr, "Expected: %s\nActual:   %s\n", expectedContext, out.c_str());
+    assert(out == expectedContext);
+  };
+  context(4, 4, "One two. Three four five. Six seven.");
+  context(3, 5, "One two. Three four five. Six seven.");
+  context(0, 0, "Zero. One two.");
+  context(8, 8, "Six seven. Eight.");
+  activity.words[3].paragraphStart = true;
+  context(4, 4, "One two.\nThree four five. Six seven.");
+  activity.words[6].paragraphStart = true;
+  context(4, 4, "One two.\nThree four five.\nSix seven.");
+  activity.words[3].paragraphStart = activity.words[6].paragraphStart = false;
+  // A long sentence is cut at the word limit each way.
+  activity.wordCount = 240;
+  for (int i = 0; i < 240; ++i) {
+    activity.words[i] = {};
+    activity.words[i].text = "w";
+    activity.words[i].startOffset = i * 2;
+    activity.words[i].endOffset = i * 2 + 1;
+  }
+  std::string out;
+  activity.buildContext(120, 120, out);
+  assert(out.size() == (2 * CONTEXT_MAX_WORDS_EACH_SIDE + 1) * 2 - 1);
+  // Too little heap skips the optional context.
+  HalMemory::stats = {8192, 4096};
+  activity.buildContext(120, 120, out);
+  assert(out.empty());
 }
 """
 with tempfile.TemporaryDirectory() as directory:
