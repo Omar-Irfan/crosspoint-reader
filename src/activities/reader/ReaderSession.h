@@ -24,7 +24,8 @@ class ReaderSession {
   // Typical seconds per page, learned from forward turns; 0 until the first. It
   // describes the reader, not one session: reset() keeps it and the owner saves it.
   uint16_t paceSeconds() const { return pace; }
-  void restorePace(uint16_t seconds) { pace = seconds; }
+  // A saved pace, clamped to the idle limit in case the stored value is damaged.
+  void restorePace(uint16_t seconds);
 
  private:
   static uint16_t clampProgress(int progressBp);

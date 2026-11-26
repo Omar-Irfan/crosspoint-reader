@@ -49,15 +49,20 @@ uint32_t ReaderSession::creditTurnedPage(const uint32_t elapsedSeconds) {
   const uint32_t typical = pace > 0 ? pace : DEFAULT_PACE_SECONDS;
   const uint32_t idleAfter = std::clamp(typical * IDLE_FACTOR, MIN_IDLE_SECONDS, MAX_IDLE_SECONDS);
   if (elapsedSeconds > idleAfter) {
-    // Read it, then walked away. A slow reader's long pages also land here
-    // until the pace has grown, so each one moves the pace toward the limit.
-    pace = static_cast<uint16_t>((3 * typical + idleAfter + 2) / 4);
+    // Read it, then walked away. A slow reader's long pages (up to the cap) also
+    // land here until the pace has grown, so those move the pace toward the limit;
+    // a real walk-away, longer than the cap, never does.
+    if (elapsedSeconds <= MAX_IDLE_SECONDS) pace = static_cast<uint16_t>((3 * typical + idleAfter + 2) / 4);
     return typical;
   }
   if (elapsedSeconds >= MIN_PACE_SAMPLE_SECONDS) {
     pace = static_cast<uint16_t>((3 * typical + elapsedSeconds + 2) / 4);
   }
   return elapsedSeconds;
+}
+
+void ReaderSession::restorePace(const uint16_t seconds) {
+  pace = static_cast<uint16_t>(std::min<uint32_t>(seconds, MAX_IDLE_SECONDS));
 }
 
 uint32_t ReaderSession::takeTrackedSeconds(const uint32_t nowMs, int64_t& epochOut) {

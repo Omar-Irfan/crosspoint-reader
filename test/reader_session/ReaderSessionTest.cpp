@@ -181,6 +181,37 @@ TEST(ReaderSession, ARestoredPaceCountsSlowPagesFromTheFirst) {
   EXPECT_EQ(session.takeTrackedSeconds(281000 + 600000, epoch), 220u);  // asleep on the next page: one typical page
 }
 
+TEST(ReaderSession, WalkingAwayAgainAndAgainDoesNotRaiseThePace) {
+  ReaderSession session;
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  int64_t epoch = 0;
+  for (int i = 0; i < 5; ++i) {
+    ms += 3600000;  // an hour on the page, then a turn
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  EXPECT_EQ(session.paceSeconds(), 0u);  // never learned from a walk-away
+  EXPECT_EQ(session.takeTrackedSeconds(ms, epoch), 5u * 60u);
+}
+
+TEST(ReaderSession, AFastReaderWhoOftenWalksAwayKeepsAFastPace) {
+  ReaderSession session;
+  session.restorePace(30);
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  for (int i = 0; i < 40; ++i) {
+    ms += i % 5 == 4 ? 600000 : 30000;  // every fifth page left for ten minutes
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  EXPECT_LT(session.paceSeconds(), 40u);
+}
+
+TEST(ReaderSession, ADamagedSavedPaceIsClamped) {
+  ReaderSession session;
+  session.restorePace(65535);
+  EXPECT_EQ(session.paceSeconds(), 300u);
+}
+
 TEST(ReaderSession, NoPageCountsMoreThanFiveMinutes) {
   ReaderSession session;
   uint32_t ms = 1000;
