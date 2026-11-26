@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 // Calendar arithmetic for the reading log, free of storage and clock access.
@@ -8,9 +9,12 @@ namespace readinglog {
 
 // A day counts as read from this many seconds; it only filters accidental opens.
 constexpr uint16_t MIN_READ_DAY_SECONDS = 120;
-// Shade thresholds in minutes: light below MEDIUM, dark below LONG, black from LONG.
+// Shades are relative to the reader's typical day (the median of read days): light
+// below half of it, black from one and a half times it. Until enough days are read
+// to know a typical day, these fixed minutes are used instead.
 constexpr uint16_t MEDIUM_DAY_MINUTES = 15;
 constexpr uint16_t LONG_DAY_MINUTES = 45;
+constexpr int MIN_DAYS_FOR_TYPICAL = 7;
 
 // Day number of a civil date (Howard Hinnant's days_from_civil).
 inline uint32_t dayFromCivil(int year, const int month, const int dayOfMonth) {
@@ -39,11 +43,31 @@ inline void civilFromDay(const uint32_t day, int& year, int& month, int& dayOfMo
 // Monday = 0 .. Sunday = 6. 1970-01-01 was a Thursday.
 inline uint8_t weekdayOfDay(const uint32_t day) { return static_cast<uint8_t>((day + 3) % 7); }
 
-// 0 = not read, 1 = light, 2 = medium, 3 = long.
-inline uint8_t level(const uint16_t seconds) {
+// Median seconds of the read days in seconds[0..count), or 0 when fewer than
+// MIN_DAYS_FOR_TYPICAL days were read. Quadratic, no copy: count is at most 366.
+inline uint16_t typicalDaySeconds(const uint16_t* seconds, const size_t count) {
+  int readDays = 0;
+  for (size_t i = 0; i < count; ++i) readDays += seconds[i] >= MIN_READ_DAY_SECONDS;
+  if (readDays < MIN_DAYS_FOR_TYPICAL) return 0;
+  const int middle = (readDays + 1) / 2;  // the lower median
+  uint16_t best = 0xFFFF;
+  for (size_t i = 0; i < count; ++i) {
+    const uint16_t v = seconds[i];
+    if (v < MIN_READ_DAY_SECONDS || v >= best) continue;
+    int atMost = 0;
+    for (size_t k = 0; k < count; ++k) atMost += seconds[k] >= MIN_READ_DAY_SECONDS && seconds[k] <= v;
+    if (atMost >= middle) best = v;
+  }
+  return best;
+}
+
+// 0 = not read, 1 = light, 2 = medium, 3 = a big day. typical 0 uses the fixed minutes.
+inline uint8_t level(const uint16_t seconds, const uint16_t typical = 0) {
   if (seconds < MIN_READ_DAY_SECONDS) return 0;
-  if (seconds < MEDIUM_DAY_MINUTES * 60) return 1;
-  if (seconds < LONG_DAY_MINUTES * 60) return 2;
+  const uint32_t lightBelow = typical > 0 ? typical / 2u : MEDIUM_DAY_MINUTES * 60u;
+  const uint32_t blackFrom = typical > 0 ? typical * 3u / 2u : LONG_DAY_MINUTES * 60u;
+  if (seconds < lightBelow) return 1;
+  if (seconds < blackFrom) return 2;
   return 3;
 }
 

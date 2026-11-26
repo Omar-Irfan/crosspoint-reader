@@ -212,30 +212,7 @@ Settings are grouped into **System**, **Display**, **Reader**, **Controls**, **L
 
 #### 3.6.1 Display
 
-- **Sleep Screen**: Which sleep screen to display when the device sleeps:
-  
-  - "Dark" (default) - The default dark BadrLabs logo sleep screen
-  - "Light" - The same default sleep screen, on a white background
-  - "Custom" - Custom images from the SD card; see [Sleep Screen](#37-sleep-screen) below for more information
-  - "Cover" - The book cover image
-  - "None" - A blank screen
-  - "Cover + Custom" - The book cover image while actively reading, falls back to "Custom" behavior otherwise
-  - "Quick resume" - The text of the last page read will be displayed on the sleep screen and a moon icon is shown on the edge of the screen. Waking up the device will return to the same page of the opened book. This is useful for quickly resuming reading without waiting for the device to fully wake up and load the book.
-  - "Transparent" - A transparent overlay image drawn over the current screen; see [Sleep Screen](#37-sleep-screen) below for more information
-  - "Cover + Transparent" - The transparent overlay image drawn over the cover of the last opened book, falls back to "Transparent" behavior if there is no book cover
-  - "Reading Activity" - An 18-week grid of the days you read (darker is more), today's reading time, the last 7 days, when you read most, and your current book with its progress; see [Reading Activity](#371-reading-activity)
-- **Sleep Screen Cover Mode**: How to display the book cover or custom sleep image:
-  
-  - "Fit" (default) - Scale the image to fit centered on the screen, padding with white borders as necessary
-  - "Crop" - Scale the image and crop as necessary to try to fill the screen
-
-- **Sleep Screen Cover Filter**: What filter will be applied to the book cover when "Cover" sleep screen is selected:
-  
-  - "None" (default) - The cover image will be converted to a grayscale image and displayed as it is
-  - "Contrast" - The image will be displayed as a black & white image without grayscale conversion
-  - "Inverted" - The image will be inverted as in white & black and will be displayed without grayscale conversion
-
-- **Quick Resume on Timeout**: Whether to enable the "Quick Resume" sleep screen when the device goes to sleep due to inactivity (Display > Time to Sleep). This is useful for quickly resuming reading without waiting for the device to fully wake up and load the book. This overwrites the Sleep Screen Cover Mode when enabled.
+- **Sleep Screen**: This build has one sleep screen, [Reading Activity](#371-reading-activity). There are no sleep screen, cover or quick-resume options.
 
 - **Status Bar**: Configure the status bar displayed while reading:
   
@@ -575,69 +552,21 @@ Once any of the options above is set up, press **Confirm** while reading to open
 
 ### 3.7 Sleep Screen
 
-The **Sleep Screen** setting controls what is displayed when the device goes to sleep:
-
-| Mode               | Behavior                                                                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Dark** (default) | The BadrLabs logo on a dark background.                                                                                      |
-| **Light**          | The BadrLabs logo on a white background.                                                                                     |
-| **Custom**         | A custom image from the SD card (see below). Falls back to **Dark** if no custom image is found.                             |
-| **Cover**          | The cover of the currently open book. Falls back to **Dark** if no book is open.                                             |
-| **Cover + Custom** | The cover of the currently open book, shown only while actively reading. Falls back to **Custom** behavior when not reading. |
-| **Transparent**    | A BMP or PNG overlay drawn over the current screen. Supports PNG and 32-bit BGRA alpha transparency, and treats white as transparent in regular BMPs. Falls back to **Dark** if no valid overlay image is found. |
-| **Cover + Transparent** | The **Transparent** overlay drawn over the cover of the last opened book, from any screen. Falls back to **Transparent** behavior if there is no book cover, and to the plain cover if no valid overlay image is found. |
-| **None**           | A blank screen.                                                                                                              |
-| **Reading Activity** | Your reading history: see [Reading Activity](#371-reading-activity). |
-
-#### Cover settings
-
-When using **Custom**, **Cover**, **Cover + Custom** or **Cover + Transparent**, two additional settings apply:
-
-- **Sleep Screen Cover Mode**: **Fit** (scale to fit, white borders) or **Crop** (scale and crop to fill the screen).
-- **Sleep Screen Cover Filter**: **None** (grayscale), **Contrast** (black & white), or **Inverted** (inverted black & white).
-
-#### Custom images
-
-To use custom sleep images, set the sleep screen mode to **Custom** or **Cover + Custom**, then place images on the SD card:
-
-- **Multiple Images (recommended):** Create a `.sleep` directory in the root of the SD card and place any number of `.bmp` images inside. One will be randomly selected each time the device sleeps. (A directory named `sleep` is also accepted as a fallback.)
-- **Single Image:** Place a file named `sleep.bmp` in the root directory. This takes priority over the `.sleep`/`sleep` directories.
-
-Like book covers, custom images are scaled to the screen using **Sleep Screen Cover Mode**. The first sleep with a new image takes longer while it is converted.
-
-#### Transparent overlay images
-
-To use transparent sleep overlays, set the sleep screen mode to **Transparent** or **Cover + Transparent**, then place BMP or PNG files on the SD card:
-
-- **Multiple Images (recommended):** Create a `.sleep-overlay` directory in the root of the SD card and place any number of valid overlay `.bmp` or `.png` images inside. One will be randomly selected each time the device sleeps. A directory named `sleep-overlay` is also accepted as a fallback.
-- **Single Image:** Place `sleep-overlay.bmp` or `sleep-overlay.png` in the root directory. A root BMP takes priority over a root PNG, and both take priority over the `.sleep-overlay`/`sleep-overlay` directories.
-
-Transparent overlay files are intentionally separate from normal sleep images. Regular BMP formats supported by CrossPoint are accepted; white pixels leave the existing screen unchanged. For per-pixel alpha transparency, use a PNG with an alpha channel or a 32-bit BGRA BMP with both visible and non-opaque pixels. Opaque white pixels in alpha images erase the content behind them.
-
-> [!TIP]
-> For best results:
-> - For non-transparent **Custom** mode, use uncompressed BMP files with 24-bit color depth.
-> - For **Transparent** mode, use a PNG or uncompressed 32-bit BGRA BMP for per-pixel alpha, or a regular BMP for white-as-transparent artwork.
-> - X4: Use a resolution of 480x800 pixels to match the device's screen resolution.
-> - X3: Use a resolution of 528x792 pixels to match the device's screen resolution.
-
-> [!TIP]
-> You can set an image as the sleep screen cover directly from the BMP image viewer in the **[Browse Files](#33-browse-files-screen)** screen. On touch devices, long-press the image.
-
----
+The sleep screen is always [Reading Activity](#371-reading-activity).
 
 #### 3.7.1 Reading Activity
 
 The **Reading Activity** sleep screen shows your reading history so you can see your habit at a glance:
 
-- An 18-week grid, one square per day, one column per week (Monday on top), with today outlined. A blank square is a day you did not read; light, dark and black mean under 15 minutes, 15 to 44, and 45 or more.
-- Today's reading time and the last 7 days (days read and total time).
-- When you read most (the busiest two-hour window), once there are a few hours of data.
+- A 24-hour dial (midnight on top) with one spoke per hour, as long as the time you read in it, next to today's reading time, your reader type (Early bird, Daytime reader, Evening reader or Night owl) and your busiest two hours.
+- This week, Monday to Sunday, as bars with the minutes read each day; today is black.
+- An 18-week grid, one square per day, one column per week (Monday on top), with today outlined and a Less/More key. Shades are relative to your typical day (the median of the days you read): light is under half of it, black is 1.5 times it or more. Until you have read on 7 days, fixed thresholds are used (under 15 minutes, 15 to 44, 45 or more).
+- One fact that changes each day: best week, longest day, this week against last week, days read in the last 30, this month, or average session.
 - Your current book with its progress.
 
-Reading time counts only while you turn pages (a page left open counts for at most 5 minutes) and is saved when you leave the book or the device sleeps, so the screen includes the session you just finished. It needs the clock: connect to Wi-Fi once (File Transfer does this) and check the timezone under Settings > System > Clock. Until something is recorded the screen says your reading will appear there.
+Reading time counts only while you turn pages. It follows your own pace: a page that takes more than three times your typical page (kept between 2 and 5 minutes) counts as one typical page, and the page open when you leave the book or the device sleeps counts at most one typical page. Your pace is remembered between sessions. Time is saved when you leave the book or the device sleeps, so the screen includes the session you just finished. It needs the clock: connect to Wi-Fi once (File Transfer does this) and check the timezone under Settings > System > Clock. Until something is recorded the screen says your reading will appear there.
 
-**Settings > System > Reading Activity** opens the same data as a page: hours per week for the last 12 weeks, when you read (morning, afternoon, evening, night), average session, best day and this month's total. Press **Year** to see a whole year as two grids (January to June, July to December) with monthly totals, and **Earlier** / **Later** to move between years. Everything is kept in `/.crosspoint/reading_log.bin` on the SD card (about 2 KB a year); delete it to start over.
+**Settings > System > Reading Activity** opens the same data as a page: hours per week for the last 12 weeks, when you read (morning, afternoon, evening, night), average session, best day and this month's total. Press **Year** to see a whole year as two grids (January to June, July to December), shaded against that year's typical day, with monthly totals, and **Earlier** / **Later** to move between years. Everything is kept in `/.crosspoint/reading_log.bin` on the SD card (about 2 KB a year); delete it to start over.
 
 ### 3.8 Custom Fonts (SD Card)
 

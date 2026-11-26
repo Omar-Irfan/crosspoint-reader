@@ -99,10 +99,8 @@ void BmpViewerActivity::loadSiblingImages() {
   }
 }
 
-bool BmpViewerActivity::canSetSleepCover() const {
-  return FsHelpers::hasBmpExtension(filePath) || FsHelpers::hasJpgExtension(filePath) ||
-         (overlaySleepMode() && FsHelpers::hasPngExtension(filePath));
-}
+// This fork's only sleep screen is Reading Activity, so no image can become the sleep cover.
+bool BmpViewerActivity::canSetSleepCover() const { return false; }
 
 bool BmpViewerActivity::renderImage() {
   const bool jpeg = FsHelpers::hasJpgExtension(filePath);

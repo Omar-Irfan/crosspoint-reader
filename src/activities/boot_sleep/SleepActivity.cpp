@@ -31,7 +31,6 @@
 #include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "images/BadrLabsLogo.h"
 #include "images/MoonIcon.h"
 #include "util/BookProgress.h"
 #include "util/ReadingActivityView.h"
@@ -832,19 +831,8 @@ void SleepActivity::renderCustomSleepScreen() const {
 // Sleep screens paint with kSleepClean (after the white clean in onEnter): HALF, not
 // the multi-flash GC waveform (0xF7) that FULL_REFRESH selects (#2471's blinking
 // complaint), except on Metalio.
-void SleepActivity::renderDefaultSleepScreen() const {
-  const bool dark = SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::LIGHT;
-
-  renderer.clearScreen();
-  drawBadrLabsLogo(renderer, dark);
-
-  // Make sleep screen dark unless light is selected in settings
-  if (dark) {
-    renderer.invertScreen();
-  }
-
-  renderer.displayBuffer(kSleepClean);
-}
+// Every fallback (no custom image, no cover) lands on Reading Activity, the fork's only sleep screen.
+void SleepActivity::renderDefaultSleepScreen() const { renderReadingActivitySleepScreen(); }
 
 void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const bool preserveBackground) const {
   const auto pageWidth = renderer.getScreenWidth();
@@ -1139,9 +1127,9 @@ void SleepActivity::renderBlankSleepScreen() const {
   renderer.displayBuffer(kSleepClean);
 }
 
-// Reading Activity: the 18-week grid on top, today and the last week in plain
-// numbers, when you read most, and the book you are in. Always light on dark
-// text so the shades stay readable.
+// Reading Activity: today and a 24-hour dial of when you read on top, this week's
+// days as bars, the 18-week grid shaded against your typical day, a fact that
+// changes daily, and the book you are in. Always dark on light so the shades stay readable.
 void SleepActivity::renderReadingActivitySleepScreen() const {
   using namespace readingview;
   renderer.clearScreen();
@@ -1157,40 +1145,60 @@ void SleepActivity::renderReadingActivitySleepScreen() const {
     return;
   }
 
-  drawGrid(renderer, (width - GRID_WIDTH) / 2, 150, summary);
-
-  char duration[32];
+  char value[32];
   char line[96];
-  formatDuration(summary.seconds[summary.today - summary.startDay], duration, sizeof(duration));
-  renderer.drawCenteredText(UI_10_FONT_ID, 395, tr(STR_TODAY));
-  renderer.drawCenteredText(UI_12_FONT_ID, 430, duration, true, EpdFontFamily::BOLD);
 
-  int daysRead = 0;
-  const uint32_t weekSeconds = lastSevenDays(summary, daysRead);
-  formatDuration(weekSeconds, duration, sizeof(duration));
-  snprintf(line, sizeof(line), "%s: %d %s, %s", tr(STR_LAST_7_DAYS), daysRead, tr(STR_DAYS_READ), duration);
-  renderer.drawCenteredText(UI_10_FONT_ID, 500, line);
+  // Dial on the left, today on the right.
+  drawHourDial(renderer, 140, 150, 34, 92, summary);
+  const int column = 290;
+  const int columnWidth = width - column - 24;
+  renderer.drawText(UI_10_FONT_ID, column, 62, tr(STR_TODAY));
+  formatDuration(summary.seconds[summary.today - summary.startDay], value, sizeof(value));
+  const bool bigFits = renderer.getTextWidth(NOTOSANS_18_FONT_ID, value, EpdFontFamily::BOLD) <= columnWidth;
+  renderer.drawText(bigFits ? NOTOSANS_18_FONT_ID : UI_12_FONT_ID, column, 88, value, true, EpdFontFamily::BOLD);
+  if (const char* type = readerType(summary)) {
+    renderer.drawText(UI_12_FONT_ID, column, 160, type, true, EpdFontFamily::BOLD);
+    formatPeakHours(summary, value, sizeof(value));
+    renderer.drawText(UI_10_FONT_ID, column, 190, value);
+  }
 
-  char peak[32];
-  formatPeakHours(summary, peak, sizeof(peak));
-  if (peak[0] != '\0') {
-    renderer.drawLine(60, 560, width - 60, 560, true);
-    snprintf(line, sizeof(line), "%s: %s", tr(STR_MOST_READING), peak);
-    renderer.drawCenteredText(UI_10_FONT_ID, 590, line);
+  // This week.
+  const int left = 40;
+  const int right = width - 40;
+  renderer.drawLine(left, 292, right, 292, true);
+  renderer.drawText(UI_10_FONT_ID, left, 306, tr(STR_THIS_WEEK), true, EpdFontFamily::BOLD);
+  formatDuration(thisWeekSeconds(summary), value, sizeof(value));
+  renderer.drawText(UI_10_FONT_ID, right - renderer.getTextWidth(UI_10_FONT_ID, value, EpdFontFamily::BOLD), 306, value,
+                    true, EpdFontFamily::BOLD);
+  drawWeekBars(renderer, left, 338, right - left, 76, summary);
+
+  // The last 18 weeks.
+  constexpr int cell = 22;
+  const int gridWidth = static_cast<int>(readinglog::HISTORY_WEEKS) * cell;
+  const int gridLeft = (width - gridWidth) / 2;
+  drawGrid(renderer, gridLeft, 516, summary, cell);
+  drawShadeKey(renderer, gridLeft + gridWidth, 516 + 7 * cell + 4, cell);
+
+  formatDailyFact(summary, line, sizeof(line));
+  if (line[0] != '\0') {
+    const std::string fact = renderer.truncatedText(UI_10_FONT_ID, line, width - 60);
+    renderer.drawCenteredText(UI_10_FONT_ID, 704, fact.c_str());
   }
 
   const auto& recent = RECENT_BOOKS.getBooks();
   if (!recent.empty()) {
-    const std::string title = renderer.truncatedText(UI_12_FONT_ID, recent.front().title.c_str(), width - 80);
-    renderer.drawCenteredText(UI_12_FONT_ID, 680, title.c_str());
+    renderer.drawLine(left, 742, right, 742, true);
     const int percent = loadBookProgress(recent.front().path);
+    char percentText[8] = "";
+    if (percent >= 0) snprintf(percentText, sizeof(percentText), "%d%%", std::min(percent, 100));
+    const int percentWidth = renderer.getTextWidth(UI_10_FONT_ID, percentText, EpdFontFamily::BOLD);
+    const std::string title =
+        renderer.truncatedText(UI_10_FONT_ID, recent.front().title.c_str(), right - left - percentWidth - 16);
+    renderer.drawText(UI_10_FONT_ID, left, 752, title.c_str());
     if (percent >= 0) {
-      const int barLeft = 60;
-      const int barWidth = width - 120;
-      renderer.drawRect(barLeft, 735, barWidth, 12, true);
-      renderer.fillRect(barLeft, 735, barWidth * std::min(percent, 100) / 100, 12, true);
-      snprintf(line, sizeof(line), "%d%%", percent);
-      renderer.drawCenteredText(UI_10_FONT_ID, 757, line);
+      renderer.drawText(UI_10_FONT_ID, right - percentWidth, 752, percentText, true, EpdFontFamily::BOLD);
+      renderer.drawRect(left, 780, right - left, 8, true);
+      renderer.fillRect(left, 780, (right - left) * std::min(percent, 100) / 100, 8, true);
     }
   }
 

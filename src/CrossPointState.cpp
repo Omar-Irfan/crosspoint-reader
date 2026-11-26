@@ -44,6 +44,7 @@ void CrossPointState::toJson(JsonDocument& doc) const {
   doc["sleepOverlayLcgState"] = sleepOverlayLcgState;
   doc["readerActivityLoadCount"] = readerActivityLoadCount;
   doc["lastSleepFromReader"] = lastSleepFromReader;
+  doc["readingPaceSeconds"] = readingPaceSeconds;
   doc["showBootScreen"] = showBootScreen;
 }
 
@@ -58,6 +59,7 @@ bool CrossPointState::fromJson(JsonVariantConst doc) {
 
   readerActivityLoadCount = doc["readerActivityLoadCount"] | static_cast<uint8_t>(0);
   lastSleepFromReader = doc["lastSleepFromReader"] | false;
+  readingPaceSeconds = doc["readingPaceSeconds"] | static_cast<uint16_t>(0);
   showBootScreen = doc["showBootScreen"] | true;
   return true;
 }
