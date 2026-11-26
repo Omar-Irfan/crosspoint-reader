@@ -20,6 +20,8 @@ class CrossPointState : public PersistableStore<CrossPointState> {
   uint32_t sleepOverlayLcgState = 0;
   uint8_t readerActivityLoadCount = 0;
   bool lastSleepFromReader = false;
+  // Typical seconds per page for the Reading Activity tracker; 0 until learned.
+  uint16_t readingPaceSeconds = 0;
   bool showBootScreen = true;
 
   static const char* getFilePath() { return "/.crosspoint/state.json"; }

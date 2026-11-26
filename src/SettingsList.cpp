@@ -9,20 +9,6 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
 
   // Enum settings are persisted as numeric values. Assign these labels by enum
   // value so a reordered menu or enum cannot silently swap their behavior.
-  static constexpr auto SLEEP_SCREEN_VALUES = [] {
-    std::array<StrId, CrossPointSettings::SLEEP_SCREEN_MODE_COUNT> values{};
-    values[CrossPointSettings::DARK] = StrId::STR_DARK;
-    values[CrossPointSettings::LIGHT] = StrId::STR_LIGHT;
-    values[CrossPointSettings::CUSTOM] = StrId::STR_CUSTOM;
-    values[CrossPointSettings::COVER] = StrId::STR_COVER;
-    values[CrossPointSettings::COVER_CUSTOM] = StrId::STR_COVER_CUSTOM;
-    values[CrossPointSettings::BLANK] = StrId::STR_NONE_OPT;
-    values[CrossPointSettings::QUICK_RESUME] = StrId::STR_QUICK_RESUME;
-    values[CrossPointSettings::TRANSPARENT_CUSTOM] = StrId::STR_TRANSPARENT;
-    values[CrossPointSettings::COVER_TRANSPARENT] = StrId::STR_COVER_TRANSPARENT;
-    values[CrossPointSettings::READING_ACTIVITY] = StrId::STR_READING_ACTIVITY;
-    return values;
-  }();
   static constexpr auto STATUS_BAR_CLOCK_VALUES = [] {
     std::array<StrId, CrossPointSettings::STATUS_BAR_CLOCK_MODE_COUNT> values{};
     values[CrossPointSettings::STATUS_BAR_CLOCK_HIDE] = StrId::STR_HIDE;
@@ -33,16 +19,8 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
 
   const auto emit = [visit, context](auto&& info) { visit(context, info); };
   // --- Display ---
-  emit(SettingInfo::StaticEnum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen, SLEEP_SCREEN_VALUES,
-                               "sleepScreen", StrId::STR_CAT_DISPLAY));
-  emit(SettingInfo::Enum(StrId::STR_SLEEP_COVER_MODE, &CrossPointSettings::sleepScreenCoverMode,
-                         {StrId::STR_FIT, StrId::STR_CROP}, "sleepScreenCoverMode", StrId::STR_CAT_DISPLAY));
-  emit(SettingInfo::Enum(StrId::STR_SLEEP_COVER_FILTER, &CrossPointSettings::sleepScreenCoverFilter,
-                         {StrId::STR_NONE_OPT, StrId::STR_FILTER_CONTRAST, StrId::STR_INVERTED},
-                         "sleepScreenCoverFilter", StrId::STR_CAT_DISPLAY));
-  emit(SettingInfo::Enum(StrId::STR_QUICK_RESUME_TIMEOUT, &CrossPointSettings::quickResumeSleepScreen,
-                         {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, "quickResumeSleepScreen",
-                         StrId::STR_CAT_DISPLAY));
+  // This fork has one sleep screen, Reading Activity, so its mode, cover and
+  // quick-resume options are not settings; their stored values are no longer read.
   emit(SettingInfo::Enum(StrId::STR_HIDE_BATTERY, &CrossPointSettings::hideBatteryPercentage,
                          {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}, "hideBatteryPercentage",
                          StrId::STR_CAT_DISPLAY));

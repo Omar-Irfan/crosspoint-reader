@@ -2,6 +2,7 @@
 
 #include <Epub.h>
 #include <FsHelpers.h>
+#include <LibraryBuilder.h>
 #include <Logging.h>
 #include <Xtc.h>
 
@@ -34,6 +35,9 @@ void clearBookCache(const std::string& path) {
 
 bool removeBookFile(const std::string& path) {
   if (!Storage.remove(path.c_str())) return false;
+  // Every delete path (web /delete, WebDAV, file browser) goes through here; without
+  // this the Library keeps listing the book until something else dirties the index.
+  if (library::isLibraryBookFile(path)) library::markLibraryIndexDirty();
   clearBookCache(path);
   return ClippingStore::deleteForFilePath(path, "epub");
 }

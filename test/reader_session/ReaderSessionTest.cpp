@@ -119,16 +119,111 @@ TEST(ReaderSession, MonotonicElapsedHandlesMillisWrap) {
   EXPECT_EQ(session.durationSeconds(), 5u);
 }
 
-TEST(ReaderSession, TracksReadingTimeWithAFiveMinuteCapPerPage) {
+TEST(ReaderSession, AnIdlePageCountsAsOneTypicalPage) {
   ReaderSession session;
   anchor(session, 1000, 100, 1000);
-  turnAndRender(session, true, true, 11000, 110, 1100);     // 10 s
-  turnAndRender(session, true, true, 3611000, 3710, 1200);  // an hour away: capped
+  turnAndRender(session, true, true, 11000, 110, 1100);     // 10 s; pace 60 -> 48
+  turnAndRender(session, true, true, 3611000, 3710, 1200);  // an hour away: one typical page
 
   int64_t epoch = 0;
-  EXPECT_EQ(session.takeTrackedSeconds(3611000, epoch), 310u);
+  EXPECT_EQ(session.takeTrackedSeconds(3611000, epoch), 58u);
   EXPECT_EQ(epoch, 3710);
   EXPECT_EQ(session.takeTrackedSeconds(3611000, epoch), 0u);  // taking clears it
+}
+
+TEST(ReaderSession, TenIdleMinutesAddOnlyTheReadersPace) {
+  ReaderSession session;
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  for (int i = 0; i < 4; ++i) {
+    ms += 40000;
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  EXPECT_EQ(session.paceSeconds(), 46u);
+  ms += 600000;  // left open for ten minutes, then turned
+  turnAndRender(session, true, true, ms, 100 + ms / 1000, 1200);
+
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(ms, epoch), 160u + 46u);
+}
+
+TEST(ReaderSession, SlowPagesStillCountInFull) {
+  ReaderSession session;
+  anchor(session, 1000, 100, 1000);
+  turnAndRender(session, true, true, 151000, 250, 1100);  // 150 s
+  turnAndRender(session, true, true, 301000, 400, 1200);  // 150 s
+  turnAndRender(session, true, true, 541000, 640, 1300);  // 240 s: the pace allows it now
+
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(541000, epoch), 540u);
+}
+
+TEST(ReaderSession, ASlowReaderLosesOnlyTheFirstLongPage) {
+  ReaderSession session;  // no saved pace yet
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  for (int i = 0; i < 4; ++i) {
+    ms += 240000;  // four minutes a page from the start
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(ms, epoch), 60u + 3u * 240u);
+  EXPECT_GE(session.paceSeconds(), 170u);
+}
+
+TEST(ReaderSession, ARestoredPaceCountsSlowPagesFromTheFirst) {
+  ReaderSession session;
+  session.restorePace(200);
+  anchor(session, 1000, 100, 1000);
+  turnAndRender(session, true, true, 281000, 380, 1100);  // 280 s
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(281000, epoch), 280u);
+  EXPECT_EQ(session.takeTrackedSeconds(281000 + 600000, epoch), 220u);  // asleep on the next page: one typical page
+}
+
+TEST(ReaderSession, WalkingAwayAgainAndAgainDoesNotRaiseThePace) {
+  ReaderSession session;
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  int64_t epoch = 0;
+  for (int i = 0; i < 5; ++i) {
+    ms += 3600000;  // an hour on the page, then a turn
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  EXPECT_EQ(session.paceSeconds(), 0u);  // never learned from a walk-away
+  EXPECT_EQ(session.takeTrackedSeconds(ms, epoch), 5u * 60u);
+}
+
+TEST(ReaderSession, AFastReaderWhoOftenWalksAwayKeepsAFastPace) {
+  ReaderSession session;
+  session.restorePace(30);
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  for (int i = 0; i < 40; ++i) {
+    ms += i % 5 == 4 ? 600000 : 30000;  // every fifth page left for ten minutes
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  EXPECT_LT(session.paceSeconds(), 40u);
+}
+
+TEST(ReaderSession, ADamagedSavedPaceIsClamped) {
+  ReaderSession session;
+  session.restorePace(65535);
+  EXPECT_EQ(session.paceSeconds(), 300u);
+}
+
+TEST(ReaderSession, NoPageCountsMoreThanFiveMinutes) {
+  ReaderSession session;
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  for (int i = 0; i < 12; ++i) {
+    ms += 290000;
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  ms += 400000;
+  turnAndRender(session, true, true, ms, 100 + ms / 1000, 1200);
+  int64_t epoch = 0;
+  EXPECT_LE(session.takeTrackedSeconds(ms, epoch), 12u * 290u + 290u);
 }
 
 TEST(ReaderSession, TrackedTimeIgnoresBackwardTurnsAndResets) {
@@ -143,7 +238,7 @@ TEST(ReaderSession, TrackedTimeIgnoresBackwardTurnsAndResets) {
   EXPECT_EQ(session.takeTrackedSeconds(21000, epoch), 0u);
 }
 
-TEST(ReaderSession, TakeCountsThePageBeingReadOnceAndCapsIt) {
+TEST(ReaderSession, TakeCountsThePageBeingReadOnceUpToThePace) {
   ReaderSession session;
   anchor(session, 1000, 100, 1000);
   int64_t epoch = 0;
@@ -151,7 +246,22 @@ TEST(ReaderSession, TakeCountsThePageBeingReadOnceAndCapsIt) {
   EXPECT_EQ(session.takeTrackedSeconds(61500, epoch), 0u);   // a second flush adds nothing
 
   anchor(session, 70000, 170, 1100);
-  EXPECT_EQ(session.takeTrackedSeconds(70000 + 3600000, epoch), 300u);  // walked away: capped
+  EXPECT_EQ(session.takeTrackedSeconds(70000 + 3600000, epoch), 60u);  // walked away: one typical page
+}
+
+TEST(ReaderSession, SleepingOnAPageCountsAtMostTheReadersPace) {
+  ReaderSession session;
+  uint32_t ms = 1000;
+  anchor(session, ms, 100, 1000);
+  for (int i = 0; i < 4; ++i) {
+    ms += 40000;
+    turnAndRender(session, true, true, ms, 100 + ms / 1000, 1100 + i);
+  }
+  int64_t epoch = 0;
+  EXPECT_EQ(session.takeTrackedSeconds(ms + 600000, epoch), 160u + 46u);  // auto-sleep after ten idle minutes
+
+  session.reset();
+  EXPECT_EQ(session.paceSeconds(), 46u);  // the pace outlives the session
 }
 
 TEST(ReaderSession, TakeIgnoresAnUntrustedClock) {

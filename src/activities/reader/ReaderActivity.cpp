@@ -76,6 +76,7 @@ void ReaderActivity::onEnter() {
 
   sdFontSystem.ensureLoaded(renderer);
   applyInitialOrientation();
+  readerSession.restorePace(APP_STATE.readingPaceSeconds);
 
   if (!loadBook()) {
     if (!handleLoadFailure()) finish();
@@ -135,6 +136,8 @@ void ReaderActivity::recordReadingTime() {
   int64_t trackedAt = 0;
   const uint32_t trackedSeconds = readerSession.takeTrackedSeconds(millis(), trackedAt);
   if (trackedSeconds > 0 && trackedAt > 0) readinglog::add(trackedAt, trackedSeconds);
+  // Saved by the caller's APP_STATE.saveToFile() on exit and before sleep.
+  APP_STATE.readingPaceSeconds = readerSession.paceSeconds();
 }
 
 void ReaderActivity::flushReaderSession() {

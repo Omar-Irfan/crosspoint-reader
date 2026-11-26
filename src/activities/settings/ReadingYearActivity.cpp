@@ -18,7 +18,7 @@ namespace {
 constexpr int CELL = 16;
 // ponytail: a year has at most 54 week columns; two stacked halves of 27 keep each cell readable.
 constexpr int WEEKS_PER_HALF = 27;
-constexpr int HALF_GAP = 36;        // room for the month names above a half
+constexpr int HALF_GAP = 36;  // room for the month names above a half
 constexpr int GRID_WIDTH = WEEKS_PER_HALF * CELL;
 constexpr char MONTH_INITIALS[] = "JFMAMJJASOND";
 constexpr const char* MONTH_NAMES[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -44,7 +44,8 @@ void ReadingYearActivity::onEnter() {
 void ReadingYearActivity::loop() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     finish();
-  } else if (year.valid && mappedInput.wasPressed(MappedInputManager::Button::NavPrevious) && year.year > year.firstYear) {
+  } else if (year.valid && mappedInput.wasPressed(MappedInputManager::Button::NavPrevious) &&
+             year.year > year.firstYear) {
     loadYear(year.year - 1);
   } else if (year.valid && mappedInput.wasPressed(MappedInputManager::Button::NavNext) && year.year < year.lastYear) {
     loadYear(year.year + 1);
@@ -63,7 +64,7 @@ void ReadingYearActivity::render(RenderLock&&) {
   if (!year.valid) {
     renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2 - 10, tr(STR_NO_READING_YET));
   } else {
-    // Grid: one column per week, Monday on top, shaded with the sleep screen's levels.
+    // Grid: one column per week, Monday on top, shaded against this year's typical day.
     const int left = (width - GRID_WIDTH) / 2;
     const int halfHeight = 7 * CELL + HALF_GAP;
     y += HALF_GAP - 8;
@@ -71,9 +72,10 @@ void ReadingYearActivity::render(RenderLock&&) {
     uint32_t monthSeconds[12] = {};
     uint32_t total = 0;
     int daysRead = 0;
+    const uint16_t typical = readinglog::typicalDaySeconds(year.seconds, year.days);
     for (uint16_t i = 0; i < year.days; ++i) {
       const uint16_t seconds = year.seconds[i];
-      const uint8_t level = readinglog::level(seconds);
+      const uint8_t level = readinglog::level(seconds, typical);
       if (level > 0) ++daysRead;
       total += seconds;
       int yearNumber, month, dayOfMonth;
@@ -116,8 +118,9 @@ void ReadingYearActivity::render(RenderLock&&) {
     renderer.drawLine(left, y + chartHeight, left + GRID_WIDTH, y + chartHeight, true);
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", year.valid && year.year > year.firstYear ? tr(STR_EARLIER) : "",
-                                            year.valid && year.year < year.lastYear ? tr(STR_LATER) : "");
+  const auto labels =
+      mappedInput.mapLabels(tr(STR_BACK), "", year.valid && year.year > year.firstYear ? tr(STR_EARLIER) : "",
+                            year.valid && year.year < year.lastYear ? tr(STR_LATER) : "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 }
