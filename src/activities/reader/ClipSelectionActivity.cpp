@@ -425,7 +425,7 @@ void ClipSelectionActivity::confirmSelection(const ClippingResult::Action action
     requestUpdate();
     return;
   }
-  // The sentence is only used by Ask AI, for lookups started from the book.
+  // The surrounding text is only used by Ask AI, for lookups started from the book.
   if (action == ClippingResult::Action::Lookup && mode != Mode::DefinitionLookup && AiAssist::isConfigured()) {
     buildContext(first, last, result.context);
   }
@@ -481,13 +481,18 @@ bool endsSentence(const char* word) {
   }
 }
 
-constexpr int CONTEXT_MAX_WORDS_EACH_SIDE = 30;
+// Ask AI background: the selection's sentence plus one sentence each side,
+// at most CONTEXT_MAX_WORDS_EACH_SIDE words each way.
+constexpr int CONTEXT_EXTRA_SENTENCES = 1;
+constexpr int CONTEXT_MAX_WORDS_EACH_SIDE = 60;
 
 }  // namespace
 
-// The sentence around [first, last] on the loaded pages: back to the word
-// after the previous sentence end, forward through the next one, never past a
-// paragraph start, at most CONTEXT_MAX_WORDS_EACH_SIDE words each way.
+// Background text around [first, last] on the loaded pages for Ask AI: the
+// selection's sentence and CONTEXT_EXTRA_SENTENCES more each way. A paragraph
+// start also counts as a sentence start, so a heading or the end of the
+// previous paragraph can be included. Text before the current page is not
+// loaded, so the context never reaches back past it.
 void ClipSelectionActivity::buildContext(const int first, const int last, std::string& out) const {
   // The context is optional: skip it rather than fail the lookup when the
   // heap cannot hold a second selection-sized buffer.
@@ -496,14 +501,19 @@ void ClipSelectionActivity::buildContext(const int first, const int last, std::s
     out.clear();
     return;
   }
+  const auto startsSentence = [this](const int i) {
+    return words[i].paragraphStart || (i > 0 && endsSentence(words[i - 1].text));
+  };
   int begin = first;
-  while (begin > 0 && first - begin < CONTEXT_MAX_WORDS_EACH_SIDE && !words[begin].paragraphStart &&
-         !endsSentence(words[begin - 1].text)) {
+  int starts = 0;
+  while (begin > 0 && first - begin < CONTEXT_MAX_WORDS_EACH_SIDE) {
+    if (startsSentence(begin) && ++starts > CONTEXT_EXTRA_SENTENCES) break;
     --begin;
   }
   int end = last;
-  while (end + 1 < static_cast<int>(wordCount) && end - last < CONTEXT_MAX_WORDS_EACH_SIDE &&
-         !words[end + 1].paragraphStart && !endsSentence(words[end].text)) {
+  int ends = 0;
+  while (end + 1 < static_cast<int>(wordCount) && end - last < CONTEXT_MAX_WORDS_EACH_SIDE) {
+    if ((endsSentence(words[end].text) || words[end + 1].paragraphStart) && ++ends > CONTEXT_EXTRA_SENTENCES) break;
     ++end;
   }
   if (!buildSelectedText(begin, end, out)) out.clear();
